@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Afacad", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  --color-ios-bg: #F2F2F7;
+  --color-ios-blue: #007AFF;
+  --color-ios-green: #34C759;
+  --color-ios-red: #FF3B30;
+  --color-ios-gray: #8E8E93;
+  --color-ios-gray2: #AEAEB2;
+  --color-ios-gray3: #C7C7CC;
+  --color-ios-gray4: #D1D1D6;
+  --color-ios-gray5: #E5E5EA;
+  --color-ios-gray6: #F2F2F7;
+  --color-ios-card: #FFFFFF;
+}
+
+:root {
+  --app-page: #f2f2f7;
+  --app-card: #ffffff;
+  --app-text: #1c1c1e;
+  --app-muted: #8e8e93;
+  --app-text-soft: #3c3c43;
+  --app-border: #e5e5ea;
+  --app-row-active: #f2f2f7;
+  --app-dock-bg: rgba(255, 255, 255, 0.94);
+  --app-dock-active: rgba(0, 122, 255, 0.1);
+  --app-accent: #007aff;
+  --app-phrase-bg: rgba(0, 122, 255, 0.06);
+  --app-phrase-text: #3c3c43;
+  --app-modal-scrim: rgba(0, 0, 0, 0.3);
+  --app-input-bg: #f2f2f7;
+  --app-chip-inactive-bg: #f2f2f7;
+  --app-toggle-off: #e5e5ea;
+  --app-handlebar: #d1d1d6;
+  --app-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  --app-search-field-bg: #ffffff;
+  --app-search-field-border: rgba(60, 60, 67, 0.18);
+  --app-search-icon: #8e8e93;
+  --app-search-text: #1c1c1e;
+  --app-search-placeholder: #8e8e93;
+}
+
+html.dark {
+  --app-page: #000000;
+  --app-card: #1c1c1e;
+  --app-text: #f2f2f7;
+  --app-muted: #8e8e93;
+  --app-text-soft: #aeaeb2;
+  --app-border: #38383a;
+  --app-row-active: #2c2c2e;
+  --app-dock-bg: rgba(28, 28, 30, 0.94);
+  --app-dock-active: rgba(10, 132, 255, 0.22);
+  --app-accent: #0a84ff;
+  --app-phrase-bg: rgba(10, 132, 255, 0.15);
+  --app-phrase-text: #ebebf5;
+  --app-modal-scrim: rgba(0, 0, 0, 0.55);
+  --app-input-bg: #2c2c2e;
+  --app-chip-inactive-bg: #2c2c2e;
+  --app-toggle-off: #39393d;
+  --app-handlebar: #636366;
+  --app-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  /* Campo de busca: superfície um pouco mais clara que o fundo, sem branco */
+  --app-search-field-bg: #2c2c2e;
+  --app-search-field-border: rgba(255, 255, 255, 0.14);
+  --app-search-icon: #8e8e93;
+  --app-search-text: #f2f2f7;
+  --app-search-placeholder: #636366;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--app-page);
+  color: var(--app-text);
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.perry-search-input::placeholder {
+  color: var(--app-search-placeholder);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.92);
+  }
+}
