@@ -21,7 +21,7 @@ Lançamentos podem ser **fixos** (replicados nos meses seguintes de forma coeren
 | Camada        | Tecnologia                          |
 |---------------|-------------------------------------|
 | UI            | React 19, TypeScript, Tailwind CSS 4 |
-| Build         | Vite 8                              |
+| Build         | Vite 7 (Vite 8 quando `vite-plugin-pwa` suportar em `peerDependencies`) |
 | Roteamento    | React Router 7                      |
 | Ícones        | Lucide React                        |
 | PWA / offline | `vite-plugin-pwa` (Workbox)         |
@@ -30,7 +30,7 @@ Lançamentos podem ser **fixos** (replicados nos meses seguintes de forma coeren
 
 ## Requisitos
 
-- **Node.js** (versão suportada pelo Vite 8; recomenda-se LTS recente)
+- **Node.js** (LTS recente; compatível com Vite 7)
 - **npm** (ou outro gestor compatível com `package-lock.json`)
 
 ---
