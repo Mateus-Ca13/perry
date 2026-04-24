@@ -33,13 +33,13 @@ export function HomeTransactionPreviews({
     <div className="px-5 mt-4 space-y-8">
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold" style={{ color: "var(--app-muted)" }}>
+          <h3 className="text-md font-semibold" style={{ color: "var(--app-muted)" }}>
             Receitas
           </h3>
           <Link
             to="/receitas"
             state={{ month: currentMonth }}
-            className="text-sm font-semibold active:opacity-60"
+            className="text-md font-semibold active:opacity-60"
             style={{ color: "var(--app-accent)" }}
           >
             Ver todas
@@ -54,13 +54,13 @@ export function HomeTransactionPreviews({
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold" style={{ color: "var(--app-muted)" }}>
+          <h3 className="text-md font-semibold" style={{ color: "var(--app-muted)" }}>
             Despesas
           </h3>
           <Link
             to="/despesas"
             state={{ month: currentMonth }}
-            className="text-sm font-semibold active:opacity-60"
+            className="text-md font-semibold active:opacity-60"
             style={{ color: "var(--app-accent)" }}
           >
             Ver todas

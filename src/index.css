@@ -28,8 +28,6 @@
   --app-dock-bg: rgba(255, 255, 255, 0.94);
   --app-dock-active: rgba(0, 122, 255, 0.1);
   --app-accent: #007aff;
-  --app-phrase-bg: rgba(0, 122, 255, 0.06);
-  --app-phrase-text: #3c3c43;
   --app-modal-scrim: rgba(0, 0, 0, 0.3);
   --app-input-bg: #f2f2f7;
   --app-chip-inactive-bg: #f2f2f7;
@@ -54,8 +52,6 @@ html.dark {
   --app-dock-bg: rgba(28, 28, 30, 0.94);
   --app-dock-active: rgba(10, 132, 255, 0.22);
   --app-accent: #0a84ff;
-  --app-phrase-bg: rgba(10, 132, 255, 0.15);
-  --app-phrase-text: #ebebf5;
   --app-modal-scrim: rgba(0, 0, 0, 0.55);
   --app-input-bg: #2c2c2e;
   --app-chip-inactive-bg: #2c2c2e;
@@ -95,6 +91,19 @@ input[type="number"]::-webkit-outer-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* Evita o campo de data vazar da tela no mobile (WebKit aplica min-width grande no nativo) */
+input[type="date"] {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: start;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {

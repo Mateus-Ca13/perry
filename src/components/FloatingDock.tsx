@@ -40,21 +40,31 @@ const DOCK_OFFSET = "4.75rem";
 export function FloatingDock({ onAddClick }: Props) {
   return (
     <>
-      <button
-        type="button"
-        onClick={onAddClick}
-        className="fixed z-[60] w-14 h-14 rounded-full flex items-center justify-center pointer-events-auto active:scale-90"
+      <div
+        className="fixed z-[60] left-0 right-0 flex justify-center pointer-events-none"
         style={{
-          right: "max(1rem, env(safe-area-inset-right))",
           bottom: `calc(max(0.5rem, env(safe-area-inset-bottom)) + ${DOCK_OFFSET})`,
-          backgroundColor: "var(--app-accent)",
-          boxShadow: "0 4px 16px color-mix(in srgb, var(--app-accent) 45%, transparent)",
-          transition: "transform 0.2s cubic-bezier(0.175,0.885,0.32,1.275)",
         }}
-        aria-label="Nova transação"
       >
-        <Plus className="w-7 h-7 text-white" strokeWidth={2.5} />
-      </button>
+        <div
+          className="w-full max-w-lg flex justify-end pointer-events-none"
+          style={{ paddingRight: "max(1rem, env(safe-area-inset-right))" }}
+        >
+          <button
+            type="button"
+            onClick={onAddClick}
+            className="w-14 h-14 rounded-full flex items-center justify-center pointer-events-auto active:scale-90 shrink-0"
+            style={{
+              backgroundColor: "var(--app-accent)",
+              boxShadow: "0 4px 16px color-mix(in srgb, var(--app-accent) 45%, transparent)",
+              transition: "transform 0.2s cubic-bezier(0.175,0.885,0.32,1.275)",
+            }}
+            aria-label="Nova transação"
+          >
+            <Plus className="w-7 h-7 text-white" strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
 
       <div
         className="fixed inset-x-0 bottom-0 z-50 flex justify-center pointer-events-none box-border"

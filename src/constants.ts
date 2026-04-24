@@ -11,6 +11,8 @@ import {
   Laptop,
   LineChart,
   Package,
+  PawPrint,
+  Percent,
   PiggyBank,
   TrendingUp,
   Tv,
@@ -44,6 +46,8 @@ export const EXPENSE_CATS: CategoryDef[] = [
   { id: "educacao", label: "Educação", Icon: GraduationCap },
   { id: "assinaturas", label: "Assinaturas", Icon: Tv },
   { id: "lazer", label: "Lazer", Icon: Gamepad2 },
+  { id: "pets", label: "Pets", Icon: PawPrint },
+  { id: "impostos", label: "Impostos", Icon: Percent },
   { id: "outros_d", label: "Outros", Icon: Package },
 ];
 

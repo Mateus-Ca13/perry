@@ -109,7 +109,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
       />
 
       <div
-        className="relative w-full max-w-lg rounded-t-3xl px-5 pt-3 pb-8 z-10"
+        className="relative w-full min-w-0 max-w-lg overflow-x-hidden rounded-t-3xl px-5 pt-3 pb-8 z-10"
         style={{
           backgroundColor: "var(--app-card)",
           maxHeight: "92vh",
@@ -189,7 +189,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           <CurrencyField value={amount} onChange={setAmount} placeholder="0,00" />
         </label>
 
-        <label className="block mb-4">
+        <label className="block mb-4 w-full min-w-0 max-w-full">
           <span
             className="text-xs font-semibold uppercase tracking-wider mb-1.5 block"
             style={{ color: "var(--app-muted)" }}
@@ -200,7 +200,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl text-base outline-none"
+            className="w-full min-w-0 max-w-full box-border px-4 py-3 rounded-xl text-base outline-none"
             style={{
               backgroundColor: "var(--app-input-bg)",
               color: "var(--app-text)",

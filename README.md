@@ -6,7 +6,7 @@ Aplicação web para **receitas, despesas e investimentos** com visão **mês a 
 
 ## O que o Perry faz
 
-- **Início (home):** navegação entre meses, resumo (entradas, saídas, investimentos, saldo), frase de contexto, prévias de lançamentos, bloco de investimentos e ação **Concluir mês — registrar sobra** (fechamento do período).
+- **Início (home):** navegação entre meses, resumo (entradas, saídas, investimentos, saldo), prévias de lançamentos, bloco de investimentos e ação **Concluir mês — registrar sobra** (fechamento do período).
 - **Receitas** (`/receitas`) e **despesas** (`/despesas`): listas filtradas por tipo, com a mesma base de transações.
 - **Investimentos** (`/investimentos`): visão dedicada a aportes e categorias de investimento.
 - **Menu** (`/menu`): ajustes como tema claro/escuro.

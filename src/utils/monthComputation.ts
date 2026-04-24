@@ -37,6 +37,8 @@ export function selectMonthTransactions(
 /** Receitas entram sempre; despesas/investimentos futuros só entram se já quitados/alocados. */
 export function transactionCountsInSummary(t: Transaction, todayISO: string): boolean {
   if (t.type === "income") return true;
+  /** Projeção de lançamento fixo no mês: vale para o mês, mesmo com dia “no futuro” de hoje. */
+  if (t._fromFixed) return true;
   if (t.date <= todayISO) return true;
   return t.paid;
 }
@@ -65,8 +67,9 @@ export function groupByDate(
   return Object.entries(map).sort(([a], [b]) => (b > a ? 1 : b < a ? -1 : 0));
 }
 
-/** Despesas com data posterior a hoje (no fuso local). */
+/** Despesas com data posterior a hoje (no fuso local). Lançamento fixo projetado nunca cai em “futuro”. */
 export function isFutureExpense(t: Transaction, todayISO: string): boolean {
+  if (t._fromFixed) return false;
   return t.type === "expense" && t.date > todayISO;
 }
 
@@ -121,6 +124,7 @@ export function firstDayOfMonthISO(c: MonthCursor): string {
 /** Itens que aparecem em listas cronológicas (exclui despesa/investimento futuros não quitados). */
 export function isVisibleInTimeline(t: Transaction, todayISO: string): boolean {
   if (t.type === "income") return true;
+  if (t._fromFixed) return true;
   if (t.date <= todayISO) return true;
   return t.paid;
 }

@@ -42,7 +42,7 @@ export function TransactionGroupedList({
     <>
       {grouped.map(([date, txs]) => (
         <div key={date} className="mb-4">
-          <p className="text-xs font-semibold mb-2 px-1" style={{ color: "var(--app-muted)" }}>
+          <p className="text-sm font-semibold mb-2 px-1" style={{ color: "var(--app-muted)" }}>
             {groupLabel(date)}
           </p>
           <div

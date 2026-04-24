@@ -22,7 +22,7 @@ export function TransactionRow({ tx, isLast, onTap }: Props) {
       ? "color-mix(in srgb, var(--app-accent) 14%, transparent)"
       : "rgba(255,59,48,0.1)";
 
-  const showPaid = (tx.type === "expense" || tx.type === "investment") && tx.paid;
+  const showStatusBadge = tx.type === "expense" || tx.type === "investment";
 
   return (
     <button
@@ -53,16 +53,28 @@ export function TransactionRow({ tx, isLast, onTap }: Props) {
               aria-label="Transação fixa"
             />
           ) : null}
-          {showPaid ? (
-            <span
-              className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md shrink-0"
-              style={{
-                backgroundColor: "rgba(52,199,89,0.15)",
-                color: "#34C759",
-              }}
-            >
-              {isInvestment ? "Aplicado" : "Pago"}
-            </span>
+          {showStatusBadge ? (
+            tx.paid ? (
+              <span
+                className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md shrink-0"
+                style={{
+                  backgroundColor: "rgba(52,199,89,0.15)",
+                  color: "#34C759",
+                }}
+              >
+                {isInvestment ? "Aplicado" : "Pago"}
+              </span>
+            ) : (
+              <span
+                className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md shrink-0"
+                style={{
+                  backgroundColor: "rgba(142,142,147,0.15)",
+                  color: "var(--app-muted)",
+                }}
+              >
+                Pendente
+              </span>
+            )
           ) : null}
         </div>
         <p className="text-xs" style={{ color: "var(--app-muted)" }}>
