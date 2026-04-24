@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from "react";
 
 const MAX_CENTS = 99_999_999_999;
 
@@ -30,6 +30,10 @@ function formatBRL(cents: number): string {
   });
 }
 
+/**
+ * Valor em reais com máscara pt-BR (vírgula decimal).
+ * Dígitos informados compõem centavos da direita (ex.: 1 → 0,01; 1999 → 19,99), como teclado de caixa.
+ */
 export function CurrencyField({
   value,
   onChange,
@@ -39,6 +43,7 @@ export function CurrencyField({
 }: Props) {
   const [cents, setCents] = useState(() => parsePropToCents(value));
   const lastEmittedRef = useRef<string | undefined>(undefined);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const normalized = value === "" || value === undefined ? "" : String(value);
@@ -56,29 +61,16 @@ export function CurrencyField({
     onChange(s);
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onInput = (e: FormEvent<HTMLInputElement>) => {
     if (disabled) return;
-    if (e.key >= "0" && e.key <= "9") {
-      e.preventDefault();
-      setCents((c) => {
-        const next = Math.min(c * 10 + parseInt(e.key, 10), MAX_CENTS);
-        const s = centsToPropString(next);
-        lastEmittedRef.current = s;
-        onChange(s);
-        return next;
-      });
+    const raw = e.currentTarget.value;
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) {
+      commitCents(0);
       return;
     }
-    if (e.key === "Backspace" || e.key === "Delete") {
-      e.preventDefault();
-      setCents((c) => {
-        const next = Math.floor(c / 10);
-        const s = centsToPropString(next);
-        lastEmittedRef.current = s;
-        onChange(s);
-        return next;
-      });
-    }
+    const n = Math.min(parseInt(digits, 10), MAX_CENTS);
+    if (!Number.isNaN(n)) commitCents(n);
   };
 
   const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
@@ -90,8 +82,8 @@ export function CurrencyField({
       commitCents(0);
       return;
     }
-    const asInt = parseInt(digits, 10);
-    if (!Number.isNaN(asInt)) commitCents(asInt);
+    const n = Math.min(parseInt(digits, 10), MAX_CENTS);
+    if (!Number.isNaN(n)) commitCents(n);
   };
 
   const display = formatBRL(cents);
@@ -100,6 +92,9 @@ export function CurrencyField({
     <div
       className="flex items-center w-full px-4 py-3 rounded-xl gap-1.5"
       style={{ backgroundColor: "var(--app-input-bg)" }}
+      onClick={() => {
+        if (!disabled) inputRef.current?.focus();
+      }}
     >
       <span
         className="text-base font-semibold shrink-0 select-none"
@@ -109,19 +104,23 @@ export function CurrencyField({
         R$
       </span>
       <input
+        ref={inputRef}
         id={id}
         type="text"
         inputMode="numeric"
         autoComplete="off"
-        readOnly
+        name="amount-brl"
         value={display}
-        onKeyDown={onKeyDown}
+        onInput={onInput}
         onPaste={onPaste}
         placeholder={placeholder}
         disabled={disabled}
-        className="flex-1 min-w-0 text-base outline-none bg-transparent disabled:opacity-50 cursor-text"
+        className="flex-1 min-w-0 min-h-[1.5rem] text-base outline-none bg-transparent disabled:opacity-50"
         style={{ color: "var(--app-text)" }}
         aria-label="Valor em reais"
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
       />
     </div>
   );

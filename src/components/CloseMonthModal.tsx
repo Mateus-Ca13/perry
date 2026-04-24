@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { MONTHS_PT } from "../constants";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import type { MonthCursor, Transaction } from "../types";
 import { fmt } from "../utils/format";
 import { firstDayOfMonthISO, nextMonthCursor } from "../utils/monthComputation";
@@ -20,6 +21,8 @@ export function CloseMonthModal({ viewedMonth, suggestedBalance, onSave, onClose
   );
   const [description, setDescription] = useState(`Sobra de ${MONTHS_PT[viewedMonth.month]}`);
   const [closing, setClosing] = useState(false);
+
+  useBodyScrollLock(true);
 
   useEffect(() => {
     setAmount(suggestedBalance > 0 ? String(suggestedBalance) : "");
@@ -48,7 +51,7 @@ export function CloseMonthModal({ viewedMonth, suggestedBalance, onSave, onClose
   const canSubmit = suggestedBalance > 0;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ touchAction: "none" }}>
       <div
         className="absolute inset-0"
         onClick={handleClose}
@@ -57,6 +60,7 @@ export function CloseMonthModal({ viewedMonth, suggestedBalance, onSave, onClose
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
           animation: closing ? "fadeIn 0.25s ease reverse forwards" : "fadeIn 0.25s ease",
+          touchAction: "none",
         }}
       />
 
@@ -66,6 +70,8 @@ export function CloseMonthModal({ viewedMonth, suggestedBalance, onSave, onClose
           backgroundColor: "var(--app-card)",
           maxHeight: "92vh",
           overflowY: "auto",
+          touchAction: "auto",
+          WebkitOverflowScrolling: "touch",
           animation: closing
             ? "slideUp 0.25s cubic-bezier(0.4,0,1,1) reverse forwards"
             : "slideUp 0.35s cubic-bezier(0.16,1,0.3,1)",

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { EXPENSE_CATS, INCOME_CATS, INVESTMENT_CATS } from "../constants";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import type { Transaction, TxType } from "../types";
 import { todayISO } from "../utils/format";
 import { CurrencyField } from "./CurrencyField";
@@ -30,6 +31,8 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
     editing ? (editing.type === "income" ? true : editing.paid) : false,
   );
   const [closing, setClosing] = useState(false);
+
+  useBodyScrollLock(true);
 
   const cats =
     type === "expense" ? EXPENSE_CATS : type === "income" ? INCOME_CATS : INVESTMENT_CATS;
@@ -84,8 +87,15 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
         ? "rgba(52,199,89,0.3)"
         : "rgba(0,122,255,0.3)";
 
+  const descriptionPlaceholder =
+    type === "expense"
+      ? "Ex.: mercado, aluguel, assinaturas"
+      : type === "income"
+        ? "Ex.: salário, 13º, renda extra"
+        : "Ex.: aporte Tesouro, compra de cotas";
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ touchAction: "none" }}>
       <div
         className="absolute inset-0"
         onClick={handleClose}
@@ -94,6 +104,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
           animation: closing ? "fadeIn 0.25s ease reverse forwards" : "fadeIn 0.25s ease",
+          touchAction: "none",
         }}
       />
 
@@ -103,6 +114,8 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           backgroundColor: "var(--app-card)",
           maxHeight: "92vh",
           overflowY: "auto",
+          touchAction: "auto",
+          WebkitOverflowScrolling: "touch",
           animation: closing
             ? "slideUp 0.25s cubic-bezier(0.4,0,1,1) reverse forwards"
             : "slideUp 0.35s cubic-bezier(0.16,1,0.3,1)",
@@ -156,7 +169,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder={type === "investment" ? "Ex: Aporte Tesouro" : "Ex: Supermercado"}
+            placeholder={descriptionPlaceholder}
             className="w-full px-4 py-3 rounded-xl text-base outline-none"
             style={{
               backgroundColor: "var(--app-input-bg)",

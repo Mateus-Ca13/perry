@@ -34,46 +34,42 @@ export function HomeTransactionPreviews({
       <section>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold" style={{ color: "var(--app-muted)" }}>
-            Entradas
+            Receitas
           </h3>
-          {entradas.length > 0 ? (
-            <Link
-              to="/receitas"
-              state={{ month: currentMonth }}
-              className="text-sm font-semibold active:opacity-60"
-              style={{ color: "var(--app-accent)" }}
-            >
-              Ver todas
-            </Link>
-          ) : null}
+          <Link
+            to="/receitas"
+            state={{ month: currentMonth }}
+            className="text-sm font-semibold active:opacity-60"
+            style={{ color: "var(--app-accent)" }}
+          >
+            Ver todas
+          </Link>
         </div>
         <TransactionGroupedList
           grouped={entradasPreview}
           onEdit={onEdit}
-          emptyText="Nenhuma entrada neste mês"
+          emptyText="Nenhuma receita neste mês"
         />
       </section>
 
       <section>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold" style={{ color: "var(--app-muted)" }}>
-            Saídas
+            Despesas
           </h3>
-          {saidas.length > 0 ? (
-            <Link
-              to="/despesas"
-              state={{ month: currentMonth }}
-              className="text-sm font-semibold active:opacity-60"
-              style={{ color: "var(--app-accent)" }}
-            >
-              Ver todas
-            </Link>
-          ) : null}
+          <Link
+            to="/despesas"
+            state={{ month: currentMonth }}
+            className="text-sm font-semibold active:opacity-60"
+            style={{ color: "var(--app-accent)" }}
+          >
+            Ver todas
+          </Link>
         </div>
         <TransactionGroupedList
           grouped={saidasPreview}
           onEdit={onEdit}
-          emptyText="Nenhuma saída neste mês"
+          emptyText="Nenhuma despesa neste mês"
         />
       </section>
     </div>
