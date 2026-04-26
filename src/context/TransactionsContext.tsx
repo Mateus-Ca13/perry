@@ -12,7 +12,13 @@ import { FloatingDock } from "../components/FloatingDock";
 import { TransactionModal } from "../components/TransactionModal";
 import type { RecurringRule, SaveTransactionPayload, Transaction } from "../types";
 import { todayISO } from "../utils/format";
-import { buildMissingOccurrences, newRecurringRuleFromForm } from "../utils/recurringMaterialize";
+import {
+  addCalendarMonths,
+  buildMissingOccurrences,
+  dayOfMonthFromIso,
+  isoDateInMonth,
+  newRecurringRuleFromForm,
+} from "../utils/recurringMaterialize";
 import { uid } from "../utils/id";
 import {
   loadPersistedAppState,
@@ -99,32 +105,56 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
     setTransactions((prev) => prev.map((t) => (t.id === clean.id ? clean : t)));
   }, []);
 
-  const deleteTransaction = useCallback((id: string) => {
-    setTransactions((prev) => {
-      const t = prev.find((x) => x.id === id);
-      if (!t) return prev;
-      if (t.recurrenceRuleId) {
-        const ym = t.date.slice(0, 7);
-        setRecurringRules((rules) =>
-          rules.map((r) =>
-            r.id === t.recurrenceRuleId
-              ? {
-                  ...r,
-                  excludedMonths: r.excludedMonths.includes(ym)
-                    ? r.excludedMonths
-                    : [...r.excludedMonths, ym],
-                }
-              : r,
-          ),
-        );
-      }
-      return prev.filter((x) => x.id !== id);
-    });
-  }, []);
+  const deleteTransaction = useCallback(
+    (id: string, scope: "single" | "allFuture" = "single") => {
+      setTransactions((prev) => {
+        const t = prev.find((x) => x.id === id);
+        if (!t) return prev;
+        if (t.recurrenceRuleId) {
+          const ruleId = t.recurrenceRuleId;
+          const deletedYm = t.date.slice(0, 7);
+          if (scope === "allFuture") {
+            const endAfter = addCalendarMonths(deletedYm, -1);
+            setRecurringRules((rules) =>
+              rules.map((r) =>
+                r.id === ruleId
+                  ? { ...r, active: false, endAfterMonth: endAfter }
+                  : r,
+              ),
+            );
+            return prev.filter(
+              (x) => !(x.recurrenceRuleId === ruleId && x.date.slice(0, 7) >= deletedYm),
+            );
+          }
+          setRecurringRules((rules) =>
+            rules.map((r) =>
+              r.id === ruleId
+                ? {
+                    ...r,
+                    excludedMonths: r.excludedMonths.includes(deletedYm)
+                      ? r.excludedMonths
+                      : [...r.excludedMonths, deletedYm],
+                  }
+                : r,
+            ),
+          );
+        }
+        return prev.filter((x) => x.id !== id);
+      });
+    },
+    [],
+  );
 
   const handleSave = useCallback(
     (raw: SaveTransactionPayload) => {
-      const { isNewRecurring, endRecurrence, id, ...data } = raw;
+      const {
+        isNewRecurring,
+        endRecurrence,
+        id,
+        dateChangeScope,
+        previousDate,
+        ...data
+      } = raw;
 
       if (isNewRecurring && !id) {
         const ruleId = uid();
@@ -181,6 +211,90 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
           closeModal();
           return;
         }
+
+        if (data.recurrenceRuleId) {
+          const nextDesc = data.description.trim();
+          setRecurringRules((rules) =>
+            rules.map((r) =>
+              r.id === data.recurrenceRuleId
+                ? { ...r, description: nextDesc }
+                : r,
+            ),
+          );
+          setTransactions((prev) =>
+            prev.map((t) =>
+              t.recurrenceRuleId === data.recurrenceRuleId
+                ? { ...t, description: nextDesc }
+                : t,
+            ),
+          );
+        }
+
+        if (
+          data.recurrenceRuleId &&
+          dateChangeScope &&
+          previousDate &&
+          (dateChangeScope === "single" || dateChangeScope === "allFuture")
+        ) {
+          if (dateChangeScope === "single") {
+            const prevYm = previousDate.slice(0, 7);
+            const newYm = data.date.slice(0, 7);
+            if (prevYm !== newYm) {
+              setRecurringRules((rules) =>
+                rules.map((r) =>
+                  r.id === data.recurrenceRuleId
+                    ? {
+                        ...r,
+                        excludedMonths: r.excludedMonths.includes(prevYm)
+                          ? r.excludedMonths
+                          : [...r.excludedMonths, prevYm],
+                      }
+                    : r,
+                ),
+              );
+            }
+            const tx: Transaction = {
+              ...data,
+              id,
+              fixed: false,
+            };
+            updateTransaction(tx);
+          } else {
+            const newDay = dayOfMonthFromIso(data.date);
+            setRecurringRules((rules) =>
+              rules.map((r) =>
+                r.id === data.recurrenceRuleId
+                  ? {
+                      ...r,
+                      dayOfMonth: newDay,
+                      defaultAmount: data.amount,
+                      description: data.description,
+                      category: data.category,
+                      defaultPaid: data.type === "income" ? true : data.paid,
+                    }
+                  : r,
+              ),
+            );
+            setTransactions((prev) =>
+              prev.map((t) => {
+                if (t.recurrenceRuleId !== data.recurrenceRuleId) return t;
+                if (t.date < previousDate) return t;
+                const ym = t.date.slice(0, 7);
+                return {
+                  ...t,
+                  date: isoDateInMonth(ym, newDay),
+                  amount: data.amount,
+                  description: data.description,
+                  category: data.category,
+                  paid: data.type === "income" ? true : data.paid,
+                };
+              }),
+            );
+          }
+          closeModal();
+          return;
+        }
+
         const tx: Transaction = { ...data, id };
         updateTransaction(tx);
       } else {
@@ -210,8 +324,8 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
           onSave={handleSave}
           onDelete={
             editingTx
-              ? () => {
-                  deleteTransaction(editingTx.id);
+              ? (scope) => {
+                  deleteTransaction(editingTx.id, scope);
                   closeModal();
                 }
               : null

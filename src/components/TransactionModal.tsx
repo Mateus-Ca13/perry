@@ -5,10 +5,12 @@ import type { SaveTransactionPayload, Transaction, TxType } from "../types";
 import { todayISO } from "../utils/format";
 import { CurrencyField } from "./CurrencyField";
 
+export type DeleteRecurrenceScope = "single" | "allFuture";
+
 type Props = {
   editing: Transaction | null;
   onSave: (tx: SaveTransactionPayload) => void;
-  onDelete: (() => void) | null;
+  onDelete: ((scope: DeleteRecurrenceScope) => void) | null;
   onClose: () => void;
 };
 
@@ -31,6 +33,8 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
     editing ? (editing.type === "income" ? true : editing.paid) : false,
   );
   const [closing, setClosing] = useState(false);
+  const [deleteScopeOpen, setDeleteScopeOpen] = useState(false);
+  const [recurrenceScopeOpen, setRecurrenceScopeOpen] = useState(false);
 
   useBodyScrollLock(true);
 
@@ -59,6 +63,11 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
     }
   }, [editing]);
 
+  useEffect(() => {
+    setDeleteScopeOpen(false);
+    setRecurrenceScopeOpen(false);
+  }, [editing]);
+
   const cats =
     type === "expense" ? EXPENSE_CATS : type === "income" ? INCOME_CATS : INVESTMENT_CATS;
 
@@ -77,9 +86,50 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
   }, [type, editing]);
 
   const handleClose = useCallback(() => {
+    setDeleteScopeOpen(false);
+    setRecurrenceScopeOpen(false);
     setClosing(true);
     setTimeout(onClose, 250);
   }, [onClose]);
+
+  const requestDelete = useCallback(() => {
+    if (!onDelete) return;
+    if (editing?.recurrenceRuleId) {
+      setDeleteScopeOpen(true);
+    } else {
+      onDelete("single");
+    }
+  }, [editing, onDelete]);
+
+  const confirmDelete = useCallback((scope: DeleteRecurrenceScope) => {
+    onDelete?.(scope);
+    setDeleteScopeOpen(false);
+  }, [onDelete]);
+
+  const confirmRecurrenceFieldScope = useCallback(
+    (scope: DeleteRecurrenceScope) => {
+      if (!editing?.recurrenceRuleId) return;
+      const val = parseFloat(String(amount).replace(",", "."));
+      if (!description.trim() || Number.isNaN(val) || val <= 0) return;
+      const amt = Math.round(val * 100) / 100;
+      const pay = editing.type === "income" ? true : paid;
+      onSave({
+        type: editing.type,
+        description: description.trim(),
+        amount: amt,
+        date,
+        category: editing.category,
+        fixed: false,
+        paid: pay,
+        id: editing.id,
+        recurrenceRuleId: editing.recurrenceRuleId,
+        dateChangeScope: scope,
+        previousDate: editing.date,
+      });
+      setRecurrenceScopeOpen(false);
+    },
+    [editing, amount, description, date, paid, onSave],
+  );
 
   const handleSave = useCallback(() => {
     const val = parseFloat(String(amount).replace(",", "."));
@@ -101,6 +151,11 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           recurrenceRuleId: editing.recurrenceRuleId,
           endRecurrence: true,
         });
+        return;
+      }
+      const amountChanged = Math.abs(amt - editing.amount) > 0.000_01;
+      if (editing.recurrenceRuleId && (date !== editing.date || amountChanged)) {
+        setRecurrenceScopeOpen(true);
         return;
       }
       onSave({
@@ -261,17 +316,25 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           >
             Data
           </span>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full min-w-0 max-w-full box-border px-4 py-3 rounded-xl text-base outline-none"
-            style={{
-              backgroundColor: "var(--app-input-bg)",
-              color: "var(--app-text)",
-              border: "none",
-            }}
-          />
+          <div
+            className="w-full min-w-0 max-w-full overflow-hidden rounded-xl"
+            style={{ backgroundColor: "var(--app-input-bg)" }}
+          >
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="box-border block w-full min-w-0 max-w-full px-4 py-3 rounded-xl text-base outline-none"
+              style={{
+                color: "var(--app-text)",
+                border: "none",
+                backgroundColor: "transparent",
+                minWidth: 0,
+                maxWidth: "100%",
+                width: "100%",
+              }}
+            />
+          </div>
         </label>
 
         <div className="mb-4">
@@ -410,7 +473,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
         {editing && onDelete ? (
           <button
             type="button"
-            onClick={onDelete}
+            onClick={requestDelete}
             className="w-full py-3 mt-2 rounded-2xl text-sm font-semibold active:scale-[0.98]"
             style={{
               color: "#FF3B30",
@@ -422,6 +485,110 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           </button>
         ) : null}
       </div>
+
+      {deleteScopeOpen && onDelete ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center p-4"
+          style={{ backgroundColor: "var(--app-modal-scrim)" }}
+          onClick={() => setDeleteScopeOpen(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-labelledby="delete-scope-title"
+            className="w-full max-w-sm rounded-2xl p-5"
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: "var(--app-card)", boxShadow: "var(--app-card-shadow)" }}
+          >
+            <h2 id="delete-scope-title" className="text-lg font-bold mb-2" style={{ color: "var(--app-text)" }}>
+              Excluir recorrência
+            </h2>
+            <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--app-muted)" }}>
+              Só este mês, ou este e os meses seguintes desta série (enquanto existirem)?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => confirmDelete("single")}
+                className="w-full py-3 rounded-xl text-sm font-semibold"
+                style={{ backgroundColor: "var(--app-input-bg)", color: "var(--app-text)" }}
+              >
+                Só este mês
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDelete("allFuture")}
+                className="w-full py-3 rounded-xl text-sm font-semibold text-white"
+                style={{ backgroundColor: "#FF3B30" }}
+              >
+                Este e os meses à frente
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteScopeOpen(false)}
+                className="w-full py-2.5 rounded-xl text-sm font-medium"
+                style={{ color: "var(--app-muted)" }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {recurrenceScopeOpen && editing?.recurrenceRuleId ? (
+        <div
+          className="fixed inset-0 z-[85] flex items-end justify-center sm:items-center p-4"
+          style={{ backgroundColor: "var(--app-modal-scrim)" }}
+          onClick={() => setRecurrenceScopeOpen(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-labelledby="recurrence-field-scope-title"
+            className="w-full max-w-sm rounded-2xl p-5"
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: "var(--app-card)", boxShadow: "var(--app-card-shadow)" }}
+          >
+            <h2
+              id="recurrence-field-scope-title"
+              className="text-lg font-bold mb-2"
+              style={{ color: "var(--app-text)" }}
+            >
+              Data ou valor
+            </h2>
+            <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--app-muted)" }}>
+              Aplicar a alteração de data e/ou valor só a esta ocorrência, ou a esta e a todas as
+              seguintes? O nome do lançamento continua a ser o mesmo em toda a série. O horizonte
+              de 6 meses reutiliza a regra.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => confirmRecurrenceFieldScope("single")}
+                className="w-full py-3 rounded-xl text-sm font-semibold"
+                style={{ backgroundColor: "var(--app-input-bg)", color: "var(--app-text)" }}
+              >
+                Só esta ocorrência
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmRecurrenceFieldScope("allFuture")}
+                className="w-full py-3 rounded-xl text-sm font-semibold text-white"
+                style={{ backgroundColor: "var(--app-accent)" }}
+              >
+                Esta e as seguintes
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecurrenceScopeOpen(false)}
+                className="w-full py-2.5 rounded-xl text-sm font-medium"
+                style={{ color: "var(--app-muted)" }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

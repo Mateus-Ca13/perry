@@ -62,4 +62,11 @@ export type SaveTransactionPayload = Omit<Transaction, "id"> & {
   id?: string;
   isNewRecurring?: boolean;
   endRecurrence?: boolean;
+  /**
+   * Com `previousDate` (data da ocorrência antes do salvar): aplica a alteração
+   * de data e/ou valor só a esta linha, ou a esta e às futuras a partir de `previousDate`.
+   * O nome (descrição) sincroniza sempre em toda a série, fora deste escopo.
+   */
+  dateChangeScope?: "single" | "allFuture";
+  previousDate?: string;
 };
