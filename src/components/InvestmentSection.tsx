@@ -32,7 +32,7 @@ export function InvestmentSection({ investments, currentMonth, onEdit }: Props) 
       <TransactionGroupedList
         grouped={groupedPreview}
         onEdit={onEdit}
-        emptyText="Nenhum aporte neste mês — toque em + para registrar"
+        emptyText="Nenhum aporte neste mês"
       />
     </div>
   );

@@ -19,7 +19,7 @@ export function FlatTransactionList({ transactions, onEdit }: Props) {
     >
       {transactions.map((tx, i) => (
         <TransactionRow
-          key={tx.id + (tx._fromFixed ? "_f" : "")}
+          key={tx.id}
           tx={tx}
           isLast={i === transactions.length - 1}
           onTap={() => onEdit(tx)}

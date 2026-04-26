@@ -54,7 +54,7 @@ export function TransactionGroupedList({
           >
             {txs.map((tx, i) => (
               <TransactionRow
-                key={tx.id + (tx._fromFixed ? "_f" : "")}
+                key={tx.id}
                 tx={tx}
                 isLast={i === txs.length - 1}
                 onTap={() => onEdit(tx)}

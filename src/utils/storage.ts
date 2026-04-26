@@ -1,5 +1,16 @@
-import { STORAGE_KEY } from "../constants";
-import type { Transaction, TxType } from "../types";
+import {
+  RECURRING_MIGRATION_V1_KEY,
+  RECURRING_RULES_KEY,
+  STORAGE_KEY,
+} from "../constants";
+import type { RecurringRule, Transaction, TxType } from "../types";
+import { todayISO } from "./format";
+import {
+  buildMissingOccurrences,
+  migrateLegacyFixedToRules,
+  normalizeRecurringRule,
+  pruneInactiveRecurrenceTxs,
+} from "./recurringMaterialize";
 
 function normalizeTransaction(raw: unknown): Transaction | null {
   if (!raw || typeof raw !== "object") return null;
@@ -18,10 +29,14 @@ function normalizeTransaction(raw: unknown): Transaction | null {
     paid = typeof o.paid === "boolean" ? o.paid : false;
   }
   if (!id || !type || !date || !Number.isFinite(amount)) return null;
-  return { id, type, description, amount, date, category, fixed, paid };
+  const rid = o.recurrenceRuleId;
+  const recurrenceRuleId =
+    typeof rid === "string" && rid.length > 0 ? rid : undefined;
+  return { id, type, description, amount, date, category, fixed, paid, recurrenceRuleId };
 }
 
 export function loadTransactions(): Transaction[] {
+  if (typeof localStorage === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw == null || raw === "") return [];
@@ -38,11 +53,82 @@ export function loadTransactions(): Transaction[] {
   }
 }
 
+export function loadRecurringRules(): RecurringRule[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(RECURRING_RULES_KEY);
+    if (raw == null || raw === "") return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: RecurringRule[] = [];
+    for (const item of parsed) {
+      const r = normalizeRecurringRule(item);
+      if (r) out.push(r);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Carga única: migra `fixed` legado, materializa a janela (6 meses) e grava.
+ */
+export function loadPersistedAppState(): { transactions: Transaction[]; rules: RecurringRule[] } {
+  if (typeof localStorage === "undefined") {
+    return { transactions: [], rules: [] };
+  }
+  const today = todayISO();
+  let transactions = loadTransactions();
+  let rules = loadRecurringRules();
+
+  if (localStorage.getItem(RECURRING_MIGRATION_V1_KEY) !== "1") {
+    const m = migrateLegacyFixedToRules(transactions, rules);
+    transactions = m.transactions;
+    rules = m.rules;
+    localStorage.setItem(RECURRING_MIGRATION_V1_KEY, "1");
+  }
+
+  transactions = pruneInactiveRecurrenceTxs(rules, transactions, today);
+
+  const more = buildMissingOccurrences(rules, transactions, today);
+  if (more.length) {
+    transactions = [...transactions, ...more];
+  }
+  saveTransactions(transactions);
+  saveRecurringRules(rules);
+  return { transactions, rules };
+}
+
 export function saveTransactions(txs: Transaction[]): void {
+  if (typeof localStorage === "undefined") return;
   try {
     const serializable = txs.map(({ _fromFixed: _, ...rest }) => rest);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
   } catch {
     /* quota ou modo privado */
+  }
+}
+
+export function saveRecurringRules(rules: RecurringRule[]): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(RECURRING_RULES_KEY, JSON.stringify(rules));
+  } catch {
+    /* quota */
+  }
+}
+
+/**
+ * Apaga transações, regras de recorrência e flag de migração. Não altera o tema.
+ */
+export function clearAllAppDataStorage(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(RECURRING_RULES_KEY);
+    localStorage.removeItem(RECURRING_MIGRATION_V1_KEY);
+  } catch {
+    /* privado, quota, etc. */
   }
 }

@@ -45,7 +45,7 @@ export function TransactionRow({ tx, isLast, onTap }: Props) {
           <p className="text-sm font-semibold truncate" style={{ color: "var(--app-text)" }}>
             {tx.description}
           </p>
-          {tx.fixed ? (
+          {tx.recurrenceRuleId || tx.fixed ? (
             <Repeat
               className="w-3.5 h-3.5 shrink-0"
               strokeWidth={2}

@@ -5,6 +5,15 @@ export function nowMonthCursor(): MonthCursor {
   return { year: d.getFullYear(), month: d.getMonth() };
 }
 
+/**
+ * Mês visto (YYYY-MM) estritamente antes do mês de hoje — ex. concluir abril só
+ * depois de 1 de maio.
+ */
+export function isViewedMonthBeforeCurrentMonth(viewed: MonthCursor, todayIso: string): boolean {
+  const viewedYm = `${viewed.year}-${String(viewed.month + 1).padStart(2, "0")}`;
+  return viewedYm < todayIso.slice(0, 7);
+}
+
 export function selectMonthTransactions(
   transactions: Transaction[],
   currentMonth: MonthCursor,
@@ -13,32 +22,26 @@ export function selectMonthTransactions(
   const pad = (n: number) => String(n).padStart(2, "0");
   const prefix = `${year}-${pad(month + 1)}`;
 
-  const direct = transactions.filter((t) => t.date.startsWith(prefix));
-  const directIds = new Set(direct.map((t) => t.id));
-
-  const fixed = transactions.filter((t) => {
-    if (!t.fixed || directIds.has(t.id)) return false;
-    const [ty, tm] = t.date.split("-").map(Number);
-    const txMonth = ty * 12 + (tm - 1);
-    const curMonth = year * 12 + month;
-    return txMonth <= curMonth;
-  });
-
-  const fixedMapped = fixed.map((t) => {
-    const day = t.date.split("-")[2];
-    return { ...t, date: `${year}-${pad(month + 1)}-${day}`, _fromFixed: true };
-  });
-
-  return [...direct, ...fixedMapped].sort((a, b) =>
-    b.date > a.date ? 1 : b.date < a.date ? -1 : 0,
-  );
+  const inMonth = transactions.filter((t) => t.date.startsWith(prefix));
+  return inMonth.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
 }
 
-/** Receitas entram sempre; despesas/investimentos futuros só entram se já quitados/alocados. */
+/**
+ * O que entra no resumo do mês (saldo, receitas/despesas/invest. do card).
+ * Ocorrências de série (recurrenceRuleId) valem no mês em que estão, mesmo com
+ * data “no futuro” em relação a hoje — ex.: Navegando em abril com hoje ainda
+ * em março, o salário de abril (materializado) entra; senão a linha some do total.
+ * Receitas manuais futuras: seguem a regra t.date <= hoje.
+ * Aportes (invest.): entram sempre no mês — o saldo desconta o comprometido, mesmo
+ * antes de “Aplicado”; a tela de Investimentos e totais “aplicados” usam só `paid` à parte.
+ * Despesas: data ≤ hoje, ou futuro se já quitado; série materializada cai no ramo com recurrenceRuleId.
+ */
 export function transactionCountsInSummary(t: Transaction, todayISO: string): boolean {
-  if (t.type === "income") return true;
-  /** Projeção de lançamento fixo no mês: vale para o mês, mesmo com dia “no futuro” de hoje. */
-  if (t._fromFixed) return true;
+  if (t.recurrenceRuleId) {
+    return true;
+  }
+  if (t.type === "income") return t.date <= todayISO;
+  if (t.type === "investment") return true;
   if (t.date <= todayISO) return true;
   return t.paid;
 }
@@ -67,10 +70,14 @@ export function groupByDate(
   return Object.entries(map).sort(([a], [b]) => (b > a ? 1 : b < a ? -1 : 0));
 }
 
-/** Despesas com data posterior a hoje (no fuso local). Lançamento fixo projetado nunca cai em “futuro”. */
+/**
+ * Despesa ainda “no futuro” em relação a hoje (sai do stream principal p/ seção de futuro).
+ * Ocorrências de série materializadas não: ficam com as outras do mês, como receitas.
+ */
 export function isFutureExpense(t: Transaction, todayISO: string): boolean {
-  if (t._fromFixed) return false;
-  return t.type === "expense" && t.date > todayISO;
+  return (
+    t.type === "expense" && t.date > todayISO && !t.recurrenceRuleId
+  );
 }
 
 export function partitionMonthForHome(
@@ -91,10 +98,18 @@ export function partitionMonthForHome(
   return { main, futureExpenses: future };
 }
 
-/** Aportes do mês na timeline (exclui investimento futuro não quitado), mais recentes primeiro. */
-export function listInvestmentsMonth(monthTxs: Transaction[], todayISO: string): Transaction[] {
+/**
+ * Aportes do mês na aba início: todos do mês selecionado (compromissos daquele mês,
+ * incluindo recorrentes ainda a vencer). A rota /investmentists continua com histórico
+ * `date <= hoje` em listAllInvestmentsSorted.
+ */
+export function listInvestmentsMonth(
+  monthTxs: Transaction[],
+  _todayISO: string,
+  _viewedMonth: MonthCursor,
+): Transaction[] {
   return monthTxs
-    .filter((t) => t.type === "investment" && isVisibleInTimeline(t, todayISO))
+    .filter((t) => t.type === "investment")
     .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
 }
 
@@ -124,7 +139,7 @@ export function firstDayOfMonthISO(c: MonthCursor): string {
 /** Itens que aparecem em listas cronológicas (exclui despesa/investimento futuros não quitados). */
 export function isVisibleInTimeline(t: Transaction, todayISO: string): boolean {
   if (t.type === "income") return true;
-  if (t._fromFixed) return true;
+  if (t.type === "expense" && t.recurrenceRuleId) return true;
   if (t.date <= todayISO) return true;
   return t.paid;
 }
@@ -136,29 +151,40 @@ export function transactionsForFullList(monthTxs: Transaction[], todayISO: strin
     .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
 }
 
-/** Todos os lançamentos de investimento (armazenados), mais recentes primeiro. */
-export function listAllInvestmentsSorted(transactions: Transaction[]): Transaction[] {
+/**
+ * Aportes para a listagem (histórico), mais recentes primeiro.
+ * Exclui datas futuras (ex.: ocorrências materializadas longe) para a lista não poluir.
+ */
+export function listAllInvestmentsSorted(transactions: Transaction[], todayISO: string): Transaction[] {
   return transactions
-    .filter((t) => t.type === "investment")
+    .filter((t) => t.type === "investment" && t.date <= todayISO)
     .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
 }
 
+/** Soma de todas as receitas (inclui datas futuras se houver). */
 export function totalIncomeAllTime(transactions: Transaction[]): number {
   return transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
 }
 
-/** Soma de aportes já aplicados / visíveis na linha do tempo (exclui futuro não quitado). */
-export function totalInvestedApplied(transactions: Transaction[], todayISO: string): number {
+/** Receitas com data ≤ hoje — base para % e textos “renda que já entrou”. */
+export function totalIncomeUpToToday(transactions: Transaction[], todayISO: string): number {
   return transactions
-    .filter((t) => t.type === "investment" && isVisibleInTimeline(t, todayISO))
+    .filter((t) => t.type === "income" && t.date <= todayISO)
     .reduce((s, t) => s + t.amount, 0);
 }
 
-/** Quantidade de meses distintos (YYYY-MM) com pelo menos um aporte registrado. */
+/** Soma só de aportes com status “aplicado” (`paid`). */
+export function totalInvestedApplied(transactions: Transaction[]): number {
+  return transactions
+    .filter((t) => t.type === "investment" && t.paid)
+    .reduce((s, t) => s + t.amount, 0);
+}
+
+/** Meses distintos (YYYY-MM) com pelo menos um aporte aplicado. */
 export function distinctInvestmentMonthCount(transactions: Transaction[]): number {
   const months = new Set<string>();
   for (const t of transactions) {
-    if (t.type !== "investment") continue;
+    if (t.type !== "investment" || !t.paid) continue;
     months.add(t.date.slice(0, 7));
   }
   return months.size;

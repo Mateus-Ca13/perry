@@ -4,14 +4,21 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { FloatingDock } from "../components/FloatingDock";
 import { TransactionModal } from "../components/TransactionModal";
-import type { Transaction } from "../types";
+import type { RecurringRule, SaveTransactionPayload, Transaction } from "../types";
+import { todayISO } from "../utils/format";
+import { buildMissingOccurrences, newRecurringRuleFromForm } from "../utils/recurringMaterialize";
 import { uid } from "../utils/id";
-import { loadTransactions, saveTransactions } from "../utils/storage";
+import {
+  loadPersistedAppState,
+  saveRecurringRules,
+  saveTransactions,
+} from "../utils/storage";
 
 type TransactionsContextValue = {
   transactions: Transaction[];
@@ -29,14 +36,43 @@ export function useTransactions() {
   return ctx;
 }
 
+const initial = loadPersistedAppState();
+
 export function TransactionsProvider({ children }: { children: ReactNode }) {
-  const [transactions, setTransactions] = useState<Transaction[]>(loadTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>(initial.transactions);
+  const [recurringRules, setRecurringRules] = useState<RecurringRule[]>(initial.rules);
   const [showModal, setShowModal] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const rulesRef = useRef(recurringRules);
+  rulesRef.current = recurringRules;
 
   useEffect(() => {
     saveTransactions(transactions);
   }, [transactions]);
+
+  useEffect(() => {
+    saveRecurringRules(recurringRules);
+  }, [recurringRules]);
+
+  useEffect(() => {
+    setTransactions((txs) => {
+      const more = buildMissingOccurrences(recurringRules, txs, todayISO());
+      return more.length ? [...txs, ...more] : txs;
+    });
+  }, [recurringRules]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        setTransactions((txs) => {
+          const more = buildMissingOccurrences(rulesRef.current, txs, todayISO());
+          return more.length ? [...txs, ...more] : txs;
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
 
   const openNew = useCallback(() => {
     setEditingTx(null);
@@ -64,15 +100,91 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteTransaction = useCallback((id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setTransactions((prev) => {
+      const t = prev.find((x) => x.id === id);
+      if (!t) return prev;
+      if (t.recurrenceRuleId) {
+        const ym = t.date.slice(0, 7);
+        setRecurringRules((rules) =>
+          rules.map((r) =>
+            r.id === t.recurrenceRuleId
+              ? {
+                  ...r,
+                  excludedMonths: r.excludedMonths.includes(ym)
+                    ? r.excludedMonths
+                    : [...r.excludedMonths, ym],
+                }
+              : r,
+          ),
+        );
+      }
+      return prev.filter((x) => x.id !== id);
+    });
   }, []);
 
   const handleSave = useCallback(
-    (payload: Omit<Transaction, "id"> & { id?: string }) => {
-      if (payload.id) {
-        updateTransaction(payload as Transaction);
+    (raw: SaveTransactionPayload) => {
+      const { isNewRecurring, endRecurrence, id, ...data } = raw;
+
+      if (isNewRecurring && !id) {
+        const ruleId = uid();
+        const rule = newRecurringRuleFromForm(
+          {
+            type: data.type,
+            date: data.date,
+            description: data.description,
+            category: data.category,
+            amount: data.amount,
+            paid: data.paid,
+          },
+          ruleId,
+        );
+        setRecurringRules((r) => [...r, rule]);
+        setTransactions((t) => [
+          ...t,
+          { ...data, id: uid(), fixed: false, recurrenceRuleId: ruleId },
+        ]);
+        closeModal();
+        return;
+      }
+
+      if (id) {
+        if (endRecurrence && data.recurrenceRuleId) {
+          const ruleId = data.recurrenceRuleId;
+          const lastYm = data.date.slice(0, 7);
+          setRecurringRules((rules) =>
+            rules.map((r) =>
+              r.id === ruleId
+                ? { ...r, active: false, endAfterMonth: lastYm }
+                : r,
+            ),
+          );
+          setTransactions((prev) => {
+            const pruned = prev.filter((t) => {
+              if (t.recurrenceRuleId !== ruleId) return true;
+              if (t.id === id) return true;
+              return t.date.slice(0, 7) <= lastYm;
+            });
+            const finalTx: Transaction = {
+              id,
+              type: data.type,
+              description: data.description,
+              amount: data.amount,
+              date: data.date,
+              category: data.category,
+              fixed: data.fixed,
+              paid: data.paid,
+              recurrenceRuleId: ruleId,
+            };
+            return pruned.map((t) => (t.id === id ? finalTx : t));
+          });
+          closeModal();
+          return;
+        }
+        const tx: Transaction = { ...data, id };
+        updateTransaction(tx);
       } else {
-        addTransaction(payload);
+        addTransaction(data);
       }
       closeModal();
     },

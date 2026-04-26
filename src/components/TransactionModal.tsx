@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { EXPENSE_CATS, INCOME_CATS, INVESTMENT_CATS } from "../constants";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
-import type { Transaction, TxType } from "../types";
+import type { SaveTransactionPayload, Transaction, TxType } from "../types";
 import { todayISO } from "../utils/format";
 import { CurrencyField } from "./CurrencyField";
 
 type Props = {
   editing: Transaction | null;
-  onSave: (tx: Omit<Transaction, "id"> & { id?: string }) => void;
+  onSave: (tx: SaveTransactionPayload) => void;
   onDelete: (() => void) | null;
   onClose: () => void;
 };
@@ -26,13 +26,38 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
   const [category, setCategory] = useState(
     editing ? defaultCat() : "alimentacao",
   );
-  const [fixed, setFixed] = useState(editing?.fixed ?? false);
+  const [fixed, setFixed] = useState(!!(editing?.recurrenceRuleId || editing?.fixed));
   const [paid, setPaid] = useState(
     editing ? (editing.type === "income" ? true : editing.paid) : false,
   );
   const [closing, setClosing] = useState(false);
 
   useBodyScrollLock(true);
+
+  useEffect(() => {
+    if (editing) {
+      setType(editing.type);
+      setDescription(editing.description);
+      setAmount(String(editing.amount));
+      setDate(editing.date);
+      setCategory(
+        editing.type === "expense" ? editing.category
+        : editing.type === "income" ? editing.category
+        : editing.type === "investment" ? editing.category
+        : "alimentacao",
+      );
+      setFixed(!!(editing.recurrenceRuleId || editing.fixed));
+      setPaid(editing.type === "income" ? true : editing.paid);
+    } else {
+      setType("expense");
+      setDescription("");
+      setAmount("");
+      setDate(todayISO());
+      setCategory("alimentacao");
+      setFixed(false);
+      setPaid(false);
+    }
+  }, [editing]);
 
   const cats =
     type === "expense" ? EXPENSE_CATS : type === "income" ? INCOME_CATS : INVESTMENT_CATS;
@@ -59,40 +84,78 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
   const handleSave = useCallback(() => {
     const val = parseFloat(String(amount).replace(",", "."));
     if (!description.trim() || Number.isNaN(val) || val <= 0) return;
-    const base: Omit<Transaction, "id"> & { id?: string } = {
+    const amt = Math.round(val * 100) / 100;
+    if (editing) {
+      const pay = editing.type === "income" ? true : paid;
+      const wasRecurring = !!(editing.recurrenceRuleId || editing.fixed);
+      if (wasRecurring && !fixed) {
+        onSave({
+          type: editing.type,
+          description: description.trim(),
+          amount: amt,
+          date,
+          category: editing.category,
+          fixed: false,
+          paid: pay,
+          id: editing.id,
+          recurrenceRuleId: editing.recurrenceRuleId,
+          endRecurrence: true,
+        });
+        return;
+      }
+      onSave({
+        type: editing.type,
+        description: description.trim(),
+        amount: amt,
+        date,
+        category: editing.category,
+        fixed: false,
+        paid: pay,
+        id: editing.id,
+        recurrenceRuleId: editing.recurrenceRuleId,
+      });
+      return;
+    }
+    const payNew = type === "income" ? true : paid;
+    onSave({
       type,
       description: description.trim(),
-      amount: Math.round(val * 100) / 100,
+      amount: amt,
       date,
       category,
-      fixed,
-      paid: type === "income" ? true : paid,
-    };
-    if (editing) base.id = editing.id;
-    onSave(base);
+      fixed: false,
+      paid: payNew,
+      isNewRecurring: fixed,
+    });
   }, [editing, type, description, amount, date, category, fixed, paid, onSave]);
 
+  const effectiveType: TxType = editing ? editing.type : type;
   const chipAccent =
-    type === "expense" ? "#FF3B30" : type === "income" ? "#34C759" : "var(--app-accent)";
+    effectiveType === "expense" ? "#FF3B30" : effectiveType === "income" ? "#34C759" : "var(--app-accent)";
   const chipBgActive =
-    type === "expense"
+    effectiveType === "expense"
       ? "rgba(255,59,48,0.12)"
-      : type === "income"
+      : effectiveType === "income"
         ? "rgba(52,199,89,0.12)"
         : "rgba(0,122,255,0.12)";
   const chipBorderActive =
-    type === "expense"
+    effectiveType === "expense"
       ? "rgba(255,59,48,0.3)"
-      : type === "income"
+      : effectiveType === "income"
         ? "rgba(52,199,89,0.3)"
         : "rgba(0,122,255,0.3)";
 
   const descriptionPlaceholder =
-    type === "expense"
+    effectiveType === "expense"
       ? "Ex.: mercado, aluguel, assinaturas"
-      : type === "income"
+      : effectiveType === "income"
         ? "Ex.: salário, 13º, renda extra"
         : "Ex.: aporte Tesouro, compra de cotas";
+
+  const categoryRowCats =
+    effectiveType === "expense" ? EXPENSE_CATS : effectiveType === "income" ? INCOME_CATS : INVESTMENT_CATS;
+  const readOnlyCategory = editing ? categoryRowCats.find((c) => c.id === editing.category) : null;
+  const ReadOnlyIcon = readOnlyCategory?.Icon;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ touchAction: "none" }}>
@@ -129,34 +192,36 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           {editing ? "Editar lançamento" : "Novo lançamento"}
         </h2>
 
-        <div
-          className="grid grid-cols-3 gap-1 rounded-xl p-1 mb-5"
-          style={{ backgroundColor: "var(--app-input-bg)" }}
-        >
-          {(["expense", "income", "investment"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setType(t)}
-              className="py-2.5 rounded-lg text-xs font-semibold leading-tight"
-              style={{
-                backgroundColor: type === t ? "var(--app-card)" : "transparent",
-                color:
-                  type === t
-                    ? t === "expense"
-                      ? "#FF3B30"
-                      : t === "income"
-                        ? "#34C759"
-                        : "var(--app-accent)"
-                    : "var(--app-muted)",
-                boxShadow: type === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                transition: "all 0.2s ease",
-              }}
-            >
-              {t === "expense" ? "Despesa" : t === "income" ? "Receita" : "Invest."}
-            </button>
-          ))}
-        </div>
+        {editing ? null : (
+          <div
+            className="grid grid-cols-3 gap-1 rounded-xl p-1 mb-5"
+            style={{ backgroundColor: "var(--app-input-bg)" }}
+          >
+            {(["expense", "income", "investment"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setType(t)}
+                className="py-2.5 rounded-lg text-xs font-semibold leading-tight"
+                style={{
+                  backgroundColor: type === t ? "var(--app-card)" : "transparent",
+                  color:
+                    type === t
+                      ? t === "expense"
+                        ? "#FF3B30"
+                        : t === "income"
+                          ? "#34C759"
+                          : "var(--app-accent)"
+                      : "var(--app-muted)",
+                  boxShadow: type === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {t === "expense" ? "Despesa" : t === "income" ? "Receita" : "Invest."}
+              </button>
+            ))}
+          </div>
+        )}
 
         <label className="block mb-4">
           <span
@@ -216,48 +281,64 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           >
             Categoria
           </span>
-          <div
-            className="flex gap-2 overflow-x-auto pb-2"
-            style={{
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
-            {cats.map((c) => {
-              const active = category === c.id;
-              const ChipIcon = c.Icon;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategory(c.id)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-full whitespace-nowrap shrink-0 active:scale-95"
-                  style={{
-                    backgroundColor: active ? chipBgActive : "var(--app-chip-inactive-bg)",
-                    color: active ? chipAccent : "var(--app-text-soft)",
-                    fontWeight: active ? 600 : 500,
-                    fontSize: 13,
-                    border: active ? `1.5px solid ${chipBorderActive}` : "1.5px solid transparent",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <ChipIcon className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
-                  <span>{c.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {editing && readOnlyCategory && ReadOnlyIcon ? (
+            <div
+              className="flex items-center gap-2 px-3 py-2.5 rounded-full w-fit"
+              style={{
+                backgroundColor: chipBgActive,
+                color: chipAccent,
+                fontWeight: 600,
+                fontSize: 13,
+                border: `1.5px solid ${chipBorderActive}`,
+              }}
+            >
+              <ReadOnlyIcon className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+              <span>{readOnlyCategory.label}</span>
+            </div>
+          ) : (
+            <div
+              className="flex gap-2 overflow-x-auto pb-2"
+              style={{
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              {cats.map((c) => {
+                const active = category === c.id;
+                const ChipIcon = c.Icon;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCategory(c.id)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-full whitespace-nowrap shrink-0 active:scale-95"
+                    style={{
+                      backgroundColor: active ? chipBgActive : "var(--app-chip-inactive-bg)",
+                      color: active ? chipAccent : "var(--app-text-soft)",
+                      fontWeight: active ? 600 : 500,
+                      fontSize: 13,
+                      border: active ? `1.5px solid ${chipBorderActive}` : "1.5px solid transparent",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <ChipIcon className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+                    <span>{c.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {type === "expense" || type === "investment" ? (
+        {effectiveType === "expense" || effectiveType === "investment" ? (
           <div className="flex items-center justify-between mb-4 px-1">
             <div>
               <p className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>
-                {type === "investment" ? "Já aplicado" : "Pago"}
+                {effectiveType === "investment" ? "Já aplicado" : "Pago"}
               </p>
               <p className="text-xs" style={{ color: "var(--app-muted)" }}>
-                {type === "investment"
+                {effectiveType === "investment"
                   ? "Marque quando o aporte já foi enviado"
                   : "Marque quando a despesa já foi quitada"}
               </p>
@@ -289,7 +370,9 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
               Lançamento fixo
             </p>
             <p className="text-xs" style={{ color: "var(--app-muted)" }}>
-              Repete automaticamente todo mês
+              {editing?.recurrenceRuleId
+                ? "Desligar encerra a série: este mês fica como último, os seguintes somem; nada de novo é gerado."
+                : "Repete automaticamente todo mês"}
             </p>
           </div>
           <button

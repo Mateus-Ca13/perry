@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { EXPENSE_CATS, INCOME_CATS } from "../constants";
 import { FlatTransactionList } from "../components/FlatTransactionList";
+import { RecurringHorizonNotice } from "../components/RecurringHorizonNotice";
 import { SubPageLayout } from "../components/SubPageLayout";
 import { TransactionGroupedList } from "../components/TransactionGroupedList";
 import { TransactionListToolbar } from "../components/TransactionListToolbar";
@@ -18,6 +19,7 @@ import {
   isDateSort,
   type SortMode,
 } from "../utils/transactionListFilters";
+import { isMonthBeyondRecurringWindow } from "../utils/recurringMaterialize";
 
 const CONFIG: Record<
   "income" | "expense",
@@ -54,6 +56,11 @@ export function FilteredTransactionsPage({ mode }: Props) {
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
 
   const today = todayISO();
+
+  const beyondHorizon = useMemo(
+    () => isMonthBeyondRecurringWindow(currentMonth, today),
+    [currentMonth, today],
+  );
 
   const monthTransactions = useMemo(
     () => selectMonthTransactions(transactions, currentMonth),
@@ -99,22 +106,28 @@ export function FilteredTransactionsPage({ mode }: Props) {
       onPrevMonth={prevMonth}
       onNextMonth={nextMonth}
     >
-      <TransactionListToolbar
-        categories={categories}
-        categoryFilter={categoryFilter}
-        onCategoryFilter={setCategoryFilter}
-        sortMode={sortMode}
-        onSortMode={setSortMode}
-        search={search}
-        onSearch={setSearch}
-      />
-
-      {isDateSort(sortMode) ? (
-        <TransactionGroupedList grouped={grouped} onEdit={openEdit} emptyText={emptyText} />
-      ) : filtered.length === 0 ? (
-        <TransactionGroupedList grouped={[]} onEdit={openEdit} emptyText={emptyText} />
+      {beyondHorizon ? (
+        <RecurringHorizonNotice />
       ) : (
-        <FlatTransactionList transactions={filtered} onEdit={openEdit} />
+        <>
+          <TransactionListToolbar
+            categories={categories}
+            categoryFilter={categoryFilter}
+            onCategoryFilter={setCategoryFilter}
+            sortMode={sortMode}
+            onSortMode={setSortMode}
+            search={search}
+            onSearch={setSearch}
+          />
+
+          {isDateSort(sortMode) ? (
+            <TransactionGroupedList grouped={grouped} onEdit={openEdit} emptyText={emptyText} />
+          ) : filtered.length === 0 ? (
+            <TransactionGroupedList grouped={[]} onEdit={openEdit} emptyText={emptyText} />
+          ) : (
+            <FlatTransactionList transactions={filtered} onEdit={openEdit} />
+          )}
+        </>
       )}
     </SubPageLayout>
   );

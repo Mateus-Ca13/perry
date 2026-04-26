@@ -8,7 +8,7 @@ import { fmt, todayISO } from "../utils/format";
 import {
   distinctInvestmentMonthCount,
   listAllInvestmentsSorted,
-  totalIncomeAllTime,
+  totalIncomeUpToToday,
   totalInvestedApplied,
 } from "../utils/monthComputation";
 import { applyListFilters, type SortMode } from "../utils/transactionListFilters";
@@ -22,8 +22,8 @@ export function InvestmentsPage() {
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
 
   const allInvestments = useMemo(
-    () => listAllInvestmentsSorted(transactions),
-    [transactions],
+    () => listAllInvestmentsSorted(transactions, today),
+    [transactions, today],
   );
 
   const filtered = useMemo(
@@ -31,11 +31,11 @@ export function InvestmentsPage() {
     [allInvestments, search, categoryFilter, sortMode],
   );
 
-  const totalIncome = useMemo(() => totalIncomeAllTime(transactions), [transactions]);
+  const totalIncome = useMemo(() => totalIncomeUpToToday(transactions, today), [transactions, today]);
 
   const investedApplied = useMemo(
-    () => totalInvestedApplied(transactions, today),
-    [transactions, today],
+    () => totalInvestedApplied(transactions),
+    [transactions],
   );
 
   const pctOfIncome = totalIncome > 0 ? (investedApplied / totalIncome) * 100 : null;
@@ -63,18 +63,17 @@ export function InvestmentsPage() {
           className="text-[11px] font-semibold tracking-widest uppercase mb-1"
           style={{ color: "var(--app-muted)" }}
         >
-          Total investido
+          Total aplicado
         </p>
         <p className="text-3xl font-bold tracking-tight" style={{ color: "var(--app-text)" }}>
           {fmt(investedApplied)}
         </p>
         {monthSpan > 0 ? (
           <p className="text-xs mt-2" style={{ color: "var(--app-muted)" }}>
-            Registrado ao longo de{" "}
+            Aporte aplicado em{" "}
             <strong style={{ color: "var(--app-text)" }}>
-              {monthSpan} {monthSpan === 1 ? "mês" : "meses"}
-            </strong>{" "}
-            com aportes
+              {monthSpan} {monthSpan === 1 ? "mês" : "meses"} distintos
+            </strong>
           </p>
         ) : null}
         {pctOfIncome != null ? (
@@ -87,7 +86,7 @@ export function InvestmentsPage() {
               })}
               %
             </strong>{" "}
-            da renda que entrou no app (todas as receitas registradas).
+            da renda com data até hoje (receitas futuras não entram no cálculo).
           </p>
         ) : (
           <p className="text-sm mt-3 leading-snug" style={{ color: "var(--app-muted)" }}>
@@ -99,7 +98,7 @@ export function InvestmentsPage() {
             className="text-xs mt-3 pt-3 border-t border-solid"
             style={{ color: "var(--app-muted)", borderColor: "var(--app-border)" }}
           >
-            Renda total registrada: <span style={{ color: "#34C759" }}>{fmt(totalIncome)}</span>
+            Renda até hoje: <span style={{ color: "#34C759" }}>{fmt(totalIncome)}</span>
           </p>
         ) : null}
       </div>
