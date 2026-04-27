@@ -6,6 +6,8 @@ import { HomeTransactionPreviews } from "../components/HomeTransactionPreviews";
 import { InvestmentSection } from "../components/InvestmentSection";
 import { MonthNav } from "../components/MonthNav";
 import { SummaryCard } from "../components/SummaryCard";
+import { HomeCardsCarousel } from "../components/HomeCardsCarousel";
+import { useCards } from "../context/CardsContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { MonthCursor } from "../types";
 import { todayISO } from "../utils/format";
@@ -23,7 +25,8 @@ import { isMonthBeyondRecurringWindow } from "../utils/recurringMaterialize";
 import { CalendarCheck } from "lucide-react";
 
 export function HomePage() {
-  const { transactions, openEdit, addTransaction } = useTransactions();
+  const { transactions, openEdit, addTransaction, openNewExpenseWithPayment } = useTransactions();
+  const { cards } = useCards();
   const [currentMonth, setCurrentMonth] = useState<MonthCursor>(nowMonthCursor);
   const [showCloseMonth, setShowCloseMonth] = useState(false);
   const [closedMonths, setClosedMonths] = useState<string[]>(loadClosedMonths);
@@ -138,6 +141,15 @@ export function HomePage() {
               )}
             </div>
           ) : null}
+
+          <HomeCardsCarousel
+            cards={cards}
+            transactions={transactions}
+            currentMonth={currentMonth}
+            onAddExpenseForCard={(cardId) =>
+              openNewExpenseWithPayment({ paymentMethod: "card", cardId })
+            }
+          />
 
           <HomeTransactionPreviews
             mainTransactions={main}

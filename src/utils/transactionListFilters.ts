@@ -69,15 +69,27 @@ export function groupTransactionsByDate(
   return entries;
 }
 
+export function matchesCardFilter(tx: Transaction, cardId: string | null): boolean {
+  if (!cardId) return true;
+  return tx.type === "expense" && tx.paymentMethod === "card" && tx.cardId === cardId;
+}
+
 export function applyListFilters(
   txs: Transaction[],
   opts: {
     search: string;
     categoryId: string;
     sortMode: SortMode;
+    cardId?: string | null;
   },
 ): Transaction[] {
-  let out = txs.filter((t) => matchesSearch(t, opts.search) && matchesCategory(t, opts.categoryId));
+  const cardF = opts.cardId !== undefined ? opts.cardId : null;
+  let out = txs.filter(
+    (t) =>
+      matchesSearch(t, opts.search) &&
+      matchesCategory(t, opts.categoryId) &&
+      matchesCardFilter(t, cardF),
+  );
   out = sortTransactions(out, opts.sortMode);
   return out;
 }

@@ -1,10 +1,18 @@
 import {
   CLOSED_MONTHS_KEY,
+  PAYMENT_CARDS_KEY,
   RECURRING_MIGRATION_V1_KEY,
   RECURRING_RULES_KEY,
   STORAGE_KEY,
 } from "../constants";
-import type { RecurringRule, Transaction, TxType } from "../types";
+import type {
+  CardBankId,
+  PaymentCard,
+  PaymentMethod,
+  RecurringRule,
+  Transaction,
+  TxType,
+} from "../types";
 import { todayISO } from "./format";
 import {
   buildMissingOccurrences,
@@ -33,7 +41,29 @@ export function normalizeTransaction(raw: unknown): Transaction | null {
   const rid = o.recurrenceRuleId;
   const recurrenceRuleId =
     typeof rid === "string" && rid.length > 0 ? rid : undefined;
-  return { id, type, description, amount, date, category, fixed, paid, recurrenceRuleId };
+  let paymentMethod: PaymentMethod | undefined;
+  const pm = o.paymentMethod;
+  if (pm === "pix" || pm === "card") {
+    paymentMethod = pm;
+  }
+  const cid = o.cardId;
+  const cardId = typeof cid === "string" && cid.length > 0 ? cid : undefined;
+  const tx: Transaction = {
+    id,
+    type,
+    description,
+    amount,
+    date,
+    category,
+    fixed,
+    paid,
+    recurrenceRuleId,
+  };
+  if (type === "expense") {
+    if (paymentMethod) tx.paymentMethod = paymentMethod;
+    if (cardId) tx.cardId = cardId;
+  }
+  return tx;
 }
 
 export function loadTransactions(): Transaction[] {
@@ -130,8 +160,49 @@ export function clearAllAppDataStorage(): void {
     localStorage.removeItem(RECURRING_RULES_KEY);
     localStorage.removeItem(RECURRING_MIGRATION_V1_KEY);
     localStorage.removeItem(CLOSED_MONTHS_KEY);
+    localStorage.removeItem(PAYMENT_CARDS_KEY);
   } catch {
     /* privado, quota, etc. */
+  }
+}
+
+const CARD_BANK_IDS = new Set<CardBankId>(["nubank", "mercado_pago", "picpay"]);
+
+function normalizePaymentCard(raw: unknown): PaymentCard | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const id = typeof o.id === "string" ? o.id : "";
+  const bankRaw = o.bankId;
+  const bankId = CARD_BANK_IDS.has(bankRaw as CardBankId) ? (bankRaw as CardBankId) : null;
+  const label = typeof o.label === "string" ? o.label.trim() : "";
+  if (!id || !bankId) return null;
+  return { id, bankId, label };
+}
+
+export function loadPaymentCards(): PaymentCard[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(PAYMENT_CARDS_KEY);
+    if (raw == null || raw === "") return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: PaymentCard[] = [];
+    for (const item of parsed) {
+      const c = normalizePaymentCard(item);
+      if (c) out.push(c);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export function savePaymentCards(cards: PaymentCard[]): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(PAYMENT_CARDS_KEY, JSON.stringify(cards));
+  } catch {
+    /* quota */
   }
 }
 

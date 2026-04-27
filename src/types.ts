@@ -2,6 +2,20 @@ import type { LucideIcon } from "lucide-react";
 
 export type TxType = "income" | "expense" | "investment";
 
+/** Forma de pagamento de despesas. */
+export type PaymentMethod = "pix" | "card";
+
+/** Instituição do cartão (presets ao criar cartão). */
+export type CardBankId = "nubank" | "mercado_pago" | "picpay";
+
+/** Cartão guardado pelo utilizador. */
+export interface PaymentCard {
+  id: string;
+  bankId: CardBankId;
+  /** Se vazio, usa o nome do banco. */
+  label: string;
+}
+
 /** Série recorrente (janela materializada; não se usa mais `fixed` para projeção). */
 export interface RecurringRule {
   id: string;
@@ -21,6 +35,9 @@ export interface RecurringRule {
   endAfterMonth?: string;
   /** Mês (YYYY-MM) em que a ocorrência foi apagada e não deve ser recriada. */
   excludedMonths: string[];
+  /** Só despesas: forma de pagamento pré-definida nas novas ocorrências. */
+  defaultPaymentMethod?: PaymentMethod;
+  defaultCardId?: string;
 }
 
 export interface Transaction {
@@ -37,6 +54,10 @@ export interface Transaction {
   _fromFixed?: boolean;
   /** Se definido, esta linha veio de uma `RecurringRule` ativa. */
   recurrenceRuleId?: string;
+  /** Despesas: PIX ou cartão. Omitido em dados antigos (tratar como PIX). */
+  paymentMethod?: PaymentMethod;
+  /** Despesa em cartão: `paymentMethod === "card"`. */
+  cardId?: string;
 }
 
 export interface MonthCursor {

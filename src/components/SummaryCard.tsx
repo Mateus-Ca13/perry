@@ -12,13 +12,13 @@ export function SummaryCard({ summary }: Props) {
         boxShadow: "var(--app-card-shadow)",
       }}
     >
-      <p className="text-sm font-medium mb-4" style={{ color: "var(--app-muted)" }}>
+      <p className="text-md font-medium mb-4" style={{ color: "var(--app-muted)" }}>
         Resumo do mês
       </p>
 
       <div className="text-center mb-5">
         <p
-          className="text-xs font-semibold uppercase tracking-wider mb-1"
+          className="text-md font-semibold uppercase tracking-wider mb-1"
           style={{ color: "var(--app-muted)" }}
         >
           Saldo disponível
@@ -43,7 +43,7 @@ export function SummaryCard({ summary }: Props) {
         >
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: "#34C759" }} />
-            <p className="text-xs font-medium truncate" style={{ color: "#34C759" }}>
+            <p className="text-sm font-medium truncate" style={{ color: "#34C759" }}>
               Receitas
             </p>
           </div>
@@ -57,7 +57,7 @@ export function SummaryCard({ summary }: Props) {
         >
           <div className="flex items-center gap-1.5 mb-1">
             <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: "#FF3B30" }} />
-            <p className="text-xs font-medium truncate" style={{ color: "#FF3B30" }}>
+            <p className="text-sm font-medium truncate" style={{ color: "#FF3B30" }}>
               Despesas
             </p>
           </div>
@@ -73,7 +73,7 @@ export function SummaryCard({ summary }: Props) {
       >
         <div className="flex items-center gap-1.5 mb-1">
           <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: "#007AFF" }} />
-          <p className="text-xs font-medium" style={{ color: "#007AFF" }}>
+          <p className="text-sm font-medium" style={{ color: "#007AFF" }}>
             Investido no mês
           </p>
         </div>

@@ -9,6 +9,24 @@ export function monthCursorToYm(c: MonthCursor): string {
   return `${c.year}-${String(c.month + 1).padStart(2, "0")}`;
 }
 
+/** Soma das despesas do mês lançadas neste cartão (fatura do mês visto). */
+export function sumCardInvoiceInMonth(
+  transactions: Transaction[],
+  cardId: string,
+  month: MonthCursor,
+): number {
+  const ym = monthCursorToYm(month);
+  return transactions
+    .filter(
+      (t) =>
+        t.type === "expense" &&
+        t.date.startsWith(ym) &&
+        t.paymentMethod === "card" &&
+        t.cardId === cardId,
+    )
+    .reduce((s, t) => s + t.amount, 0);
+}
+
 /**
  * Mês visto (YYYY-MM) estritamente antes do mês de hoje — ex. concluir abril só
  * depois de 1 de maio.
@@ -123,6 +141,13 @@ export function sliceThenGroupByDate(
 ): [string, Transaction[]][] {
   const sorted = [...transactions].sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
   return groupByDate(sorted.slice(0, maxItems));
+}
+
+/** Últimos N lançamentos por data (mais recente primeiro), sem agrupar. */
+export function sliceLatestTransactions(transactions: Transaction[], maxItems: number): Transaction[] {
+  return [...transactions]
+    .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0))
+    .slice(0, maxItems);
 }
 
 export function prevMonthCursor(c: MonthCursor): MonthCursor {

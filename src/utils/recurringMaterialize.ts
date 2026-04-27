@@ -1,5 +1,5 @@
 import { RECURRING_WINDOW_MONTHS } from "../constants";
-import type { MonthCursor, RecurringRule, Transaction, TxType } from "../types";
+import type { MonthCursor, PaymentMethod, RecurringRule, Transaction, TxType } from "../types";
 import { uid } from "./id";
 
 function monthCursorToYm(c: MonthCursor): string {
@@ -105,6 +105,9 @@ export function buildMissingOccurrences(
         fixed: false,
         paid: rule.type === "income" ? true : rule.defaultPaid,
         recurrenceRuleId: rule.id,
+        ...(rule.type === "expense"
+          ? expensePaymentFieldsFromRule(rule)
+          : {}),
       });
     }
   }
@@ -116,6 +119,15 @@ export function dayOfMonthFromIso(iso: string): number {
   return Number.isFinite(d) && d > 0 ? d : 1;
 }
 
+function expensePaymentFieldsFromRule(
+  rule: RecurringRule,
+): Pick<Transaction, "paymentMethod" | "cardId"> {
+  const pm = rule.defaultPaymentMethod ?? "pix";
+  if (pm === "pix") return { paymentMethod: "pix" };
+  if (rule.defaultCardId) return { paymentMethod: "card", cardId: rule.defaultCardId };
+  return { paymentMethod: "pix" };
+}
+
 /** Cria regra a partir de um lançamento novo (ainda sem id no form). */
 export function newRecurringRuleFromForm(
   p: {
@@ -125,10 +137,12 @@ export function newRecurringRuleFromForm(
     category: string;
     amount: number;
     paid: boolean;
+    paymentMethod?: PaymentMethod;
+    cardId?: string;
   },
   ruleId: string,
 ): RecurringRule {
-  return {
+  const rule: RecurringRule = {
     id: ruleId,
     type: p.type,
     dayOfMonth: dayOfMonthFromIso(p.date),
@@ -140,10 +154,16 @@ export function newRecurringRuleFromForm(
     active: true,
     excludedMonths: [],
   };
+  if (p.type === "expense") {
+    const pm = p.paymentMethod === "card" ? "card" : "pix";
+    rule.defaultPaymentMethod = pm;
+    if (pm === "card" && p.cardId) rule.defaultCardId = p.cardId;
+  }
+  return rule;
 }
 
 export function createRecurringRuleFromTransaction(t: Transaction, ruleId: string): RecurringRule {
-  return {
+  const rule: RecurringRule = {
     id: ruleId,
     type: t.type,
     dayOfMonth: dayOfMonthFromIso(t.date),
@@ -155,6 +175,12 @@ export function createRecurringRuleFromTransaction(t: Transaction, ruleId: strin
     active: true,
     excludedMonths: [],
   };
+  if (t.type === "expense") {
+    const pm = t.paymentMethod === "card" ? "card" : "pix";
+    rule.defaultPaymentMethod = pm;
+    if (pm === "card" && t.cardId) rule.defaultCardId = t.cardId;
+  }
+  return rule;
 }
 
 /**
@@ -200,7 +226,7 @@ export function normalizeRecurringRule(raw: unknown): RecurringRule | null {
     typeof eam === "string" && /^\d{4}-\d{2}$/.test(eam) ? eam : undefined;
   if (!id || !type || !Number.isFinite(defaultAmount) || !Number.isFinite(day)) return null;
   if (!startMonth) return null;
-  return {
+  const rule: RecurringRule = {
     id,
     type,
     dayOfMonth: day,
@@ -213,4 +239,15 @@ export function normalizeRecurringRule(raw: unknown): RecurringRule | null {
     endAfterMonth,
     excludedMonths,
   };
+  if (type === "expense") {
+    const pm = o.defaultPaymentMethod;
+    if (pm === "pix" || pm === "card") {
+      rule.defaultPaymentMethod = pm;
+      if (pm === "card") {
+        const dc = o.defaultCardId;
+        if (typeof dc === "string" && dc.length > 0) rule.defaultCardId = dc;
+      }
+    }
+  }
+  return rule;
 }

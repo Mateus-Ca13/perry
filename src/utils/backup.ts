@@ -1,12 +1,14 @@
 import { RECURRING_MIGRATION_V1_KEY } from "../constants";
-import type { RecurringRule, Transaction } from "../types";
+import type { PaymentCard, RecurringRule, Transaction } from "../types";
 import { normalizeRecurringRule } from "./recurringMaterialize";
 import {
   loadClosedMonths,
+  loadPaymentCards,
   loadRecurringRules,
   loadTransactions,
   normalizeTransaction,
   saveClosedMonthsList,
+  savePaymentCards,
   saveRecurringRules,
   saveTransactions,
 } from "./storage";
@@ -21,6 +23,7 @@ export type PerryBackupFile = {
   transactions: Transaction[];
   recurringRules: RecurringRule[];
   closedMonths: string[];
+  paymentCards: PaymentCard[];
 };
 
 export function buildPerryBackupObject(): PerryBackupFile {
@@ -30,6 +33,7 @@ export function buildPerryBackupObject(): PerryBackupFile {
     transactions: loadTransactions(),
     recurringRules: loadRecurringRules(),
     closedMonths: loadClosedMonths(),
+    paymentCards: loadPaymentCards(),
   };
 }
 
@@ -101,10 +105,32 @@ export function importPerryBackupFromObject(
     );
   }
 
+  let paymentCards: PaymentCard[] = [];
+  if (o.paymentCards !== undefined) {
+    if (!Array.isArray(o.paymentCards)) {
+      return { ok: false, error: "O campo paymentCards é inválido." };
+    }
+    const CARD_BANK_IDS = new Set(["nubank", "mercado_pago", "picpay"]);
+    for (const item of o.paymentCards) {
+      if (!item || typeof item !== "object") continue;
+      const pc = item as Record<string, unknown>;
+      const id = typeof pc.id === "string" ? pc.id : "";
+      const bid = pc.bankId;
+      const label = typeof pc.label === "string" ? pc.label.trim() : "";
+      if (!id || typeof bid !== "string" || !CARD_BANK_IDS.has(bid)) continue;
+      paymentCards.push({
+        id,
+        bankId: bid as PaymentCard["bankId"],
+        label,
+      });
+    }
+  }
+
   try {
     saveTransactions(transactions);
     saveRecurringRules(recurringRules);
     saveClosedMonthsList(closedMonths);
+    savePaymentCards(paymentCards);
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(RECURRING_MIGRATION_V1_KEY, "1");
     }

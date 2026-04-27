@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
+import { bankPresetById } from "../data/cardBanks";
 import { EXPENSE_CATS, INCOME_CATS } from "../constants";
 import { FlatTransactionList } from "../components/FlatTransactionList";
 import { RecurringHorizonNotice } from "../components/RecurringHorizonNotice";
 import { SubPageLayout } from "../components/SubPageLayout";
 import { TransactionGroupedList } from "../components/TransactionGroupedList";
 import { TransactionListToolbar } from "../components/TransactionListToolbar";
+import { useCards } from "../context/CardsContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { MonthCursor, TxType } from "../types";
 import { todayISO } from "../utils/format";
@@ -41,7 +43,9 @@ type Props = { mode: "income" | "expense" };
 
 export function FilteredTransactionsPage({ mode }: Props) {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { transactions, openEdit } = useTransactions();
+  const { cards } = useCards();
   const { title, types, empty } = CONFIG[mode];
   const categories = mode === "income" ? INCOME_CATS : EXPENSE_CATS;
 
@@ -55,7 +59,17 @@ export function FilteredTransactionsPage({ mode }: Props) {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
 
+  const filterCardId = mode === "expense" ? searchParams.get("cartao") : null;
+  const filterCard =
+    filterCardId != null && filterCardId !== "" ? cards.find((c) => c.id === filterCardId) : null;
+
   const today = todayISO();
+
+  const clearCardFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("cartao");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const beyondHorizon = useMemo(
     () => isMonthBeyondRecurringWindow(currentMonth, today),
@@ -73,8 +87,14 @@ export function FilteredTransactionsPage({ mode }: Props) {
   }, [monthTransactions, today, types]);
 
   const filtered = useMemo(
-    () => applyListFilters(forList, { search, categoryId: categoryFilter, sortMode }),
-    [forList, search, categoryFilter, sortMode],
+    () =>
+      applyListFilters(forList, {
+        search,
+        categoryId: categoryFilter,
+        sortMode,
+        cardId: filterCardId || null,
+      }),
+    [forList, search, categoryFilter, sortMode, filterCardId],
   );
 
   const grouped = useMemo(() => {
@@ -110,6 +130,32 @@ export function FilteredTransactionsPage({ mode }: Props) {
         <RecurringHorizonNotice />
       ) : (
         <>
+          {filterCardId && mode === "expense" ? (
+            <div
+              className="flex items-center justify-between gap-2 mb-3 px-1 py-2 rounded-xl"
+              style={{
+                backgroundColor: "var(--app-dock-active)",
+                border: "1px solid color-mix(in srgb, var(--app-accent) 20%, transparent)",
+              }}
+            >
+              <p className="text-sm font-medium min-w-0 truncate" style={{ color: "var(--app-text)" }}>
+                Fatura:{" "}
+                <strong>
+                  {filterCard
+                    ? filterCard.label || bankPresetById(filterCard.bankId)?.label || "Cartão"
+                    : "Cartão"}
+                </strong>
+              </p>
+              <button
+                type="button"
+                onClick={clearCardFilter}
+                className="shrink-0 text-sm font-semibold px-2 py-1 rounded-lg active:opacity-70"
+                style={{ color: "var(--app-accent)" }}
+              >
+                Limpar
+              </button>
+            </div>
+          ) : null}
           <TransactionListToolbar
             categories={categories}
             categoryFilter={categoryFilter}

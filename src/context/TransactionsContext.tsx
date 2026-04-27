@@ -10,7 +10,7 @@ import {
 } from "react";
 import { FloatingDock } from "../components/FloatingDock";
 import { TransactionModal } from "../components/TransactionModal";
-import type { RecurringRule, SaveTransactionPayload, Transaction } from "../types";
+import type { PaymentMethod, RecurringRule, SaveTransactionPayload, Transaction } from "../types";
 import { todayISO } from "../utils/format";
 import {
   addCalendarMonths,
@@ -26,10 +26,14 @@ import {
   saveTransactions,
 } from "../utils/storage";
 
+type ExpenseModalPrefill = { paymentMethod: PaymentMethod; cardId?: string };
+
 type TransactionsContextValue = {
   transactions: Transaction[];
   openEdit: (tx: Transaction) => void;
   addTransaction: (tx: Omit<Transaction, "id">) => void;
+  openNewExpenseWithPayment: (prefill: ExpenseModalPrefill) => void;
+  stripCardFromTransactions: (cardId: string) => void;
 };
 
 const TransactionsContext = createContext<TransactionsContextValue | null>(null);
@@ -49,6 +53,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
   const [recurringRules, setRecurringRules] = useState<RecurringRule[]>(initial.rules);
   const [showModal, setShowModal] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [modalExpensePrefill, setModalExpensePrefill] = useState<ExpenseModalPrefill | null>(null);
   const rulesRef = useRef(recurringRules);
   rulesRef.current = recurringRules;
 
@@ -82,11 +87,27 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
 
   const openNew = useCallback(() => {
     setEditingTx(null);
+    setModalExpensePrefill(null);
     setShowModal(true);
+  }, []);
+
+  const openNewExpenseWithPayment = useCallback((prefill: ExpenseModalPrefill) => {
+    setEditingTx(null);
+    setModalExpensePrefill(prefill);
+    setShowModal(true);
+  }, []);
+
+  const stripCardFromTransactions = useCallback((cardId: string) => {
+    setTransactions((prev) =>
+      prev.map((t) =>
+        t.cardId === cardId ? { ...t, paymentMethod: "pix" as const, cardId: undefined } : t,
+      ),
+    );
   }, []);
 
   const openEdit = useCallback((tx: Transaction) => {
     const canonical = transactions.find((t) => t.id === tx.id) ?? tx;
+    setModalExpensePrefill(null);
     setEditingTx(canonical);
     setShowModal(true);
   }, [transactions]);
@@ -94,6 +115,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
   const closeModal = useCallback(() => {
     setShowModal(false);
     setEditingTx(null);
+    setModalExpensePrefill(null);
   }, []);
 
   const addTransaction = useCallback((tx: Omit<Transaction, "id">) => {
@@ -166,14 +188,26 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
             category: data.category,
             amount: data.amount,
             paid: data.paid,
+            ...(data.type === "expense"
+              ? {
+                  paymentMethod: data.paymentMethod,
+                  cardId: data.cardId,
+                }
+              : {}),
           },
           ruleId,
         );
         setRecurringRules((r) => [...r, rule]);
-        setTransactions((t) => [
-          ...t,
-          { ...data, id: uid(), fixed: false, recurrenceRuleId: ruleId },
-        ]);
+        const txBase: Omit<Transaction, "id"> = {
+          ...data,
+          fixed: false,
+          recurrenceRuleId: ruleId,
+        };
+        if (data.type !== "expense") {
+          delete (txBase as Partial<Transaction>).paymentMethod;
+          delete (txBase as Partial<Transaction>).cardId;
+        }
+        setTransactions((t) => [...t, { ...txBase, id: uid() }]);
         closeModal();
         return;
       }
@@ -205,6 +239,13 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
               fixed: data.fixed,
               paid: data.paid,
               recurrenceRuleId: ruleId,
+              ...(data.type === "expense"
+                ? {
+                    paymentMethod: data.paymentMethod === "card" ? ("card" as const) : ("pix" as const),
+                    cardId:
+                      data.paymentMethod === "card" && data.cardId ? data.cardId : undefined,
+                  }
+                : {}),
             };
             return pruned.map((t) => (t.id === id ? finalTx : t));
           });
@@ -261,6 +302,14 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
             updateTransaction(tx);
           } else {
             const newDay = dayOfMonthFromIso(data.date);
+            const expenseRulePatch =
+              data.type === "expense"
+                ? {
+                    defaultPaymentMethod: (data.paymentMethod === "card" ? "card" : "pix") as PaymentMethod,
+                    defaultCardId:
+                      data.paymentMethod === "card" && data.cardId ? data.cardId : undefined,
+                  }
+                : {};
             setRecurringRules((rules) =>
               rules.map((r) =>
                 r.id === data.recurrenceRuleId
@@ -271,6 +320,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
                       description: data.description,
                       category: data.category,
                       defaultPaid: data.type === "income" ? true : data.paid,
+                      ...expenseRulePatch,
                     }
                   : r,
               ),
@@ -280,6 +330,14 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
                 if (t.recurrenceRuleId !== data.recurrenceRuleId) return t;
                 if (t.date < previousDate) return t;
                 const ym = t.date.slice(0, 7);
+                const payPatch =
+                  data.type === "expense"
+                    ? {
+                        paymentMethod: (data.paymentMethod === "card" ? "card" : "pix") as PaymentMethod,
+                        cardId:
+                          data.paymentMethod === "card" && data.cardId ? data.cardId : undefined,
+                      }
+                    : {};
                 return {
                   ...t,
                   date: isoDateInMonth(ym, newDay),
@@ -287,6 +345,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
                   description: data.description,
                   category: data.category,
                   paid: data.type === "income" ? true : data.paid,
+                  ...payPatch,
                 };
               }),
             );
@@ -310,8 +369,10 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       transactions,
       openEdit,
       addTransaction,
+      openNewExpenseWithPayment,
+      stripCardFromTransactions,
     }),
-    [transactions, openEdit, addTransaction],
+    [transactions, openEdit, addTransaction, openNewExpenseWithPayment, stripCardFromTransactions],
   );
 
   return (
@@ -321,6 +382,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       {showModal ? (
         <TransactionModal
           editing={editingTx}
+          expensePrefill={modalExpensePrefill}
           onSave={handleSave}
           onDelete={
             editingTx

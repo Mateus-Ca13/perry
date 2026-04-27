@@ -1,20 +1,28 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { ChevronDown } from "lucide-react";
 import { EXPENSE_CATS, INCOME_CATS, INVESTMENT_CATS } from "../constants";
+import { bankPresetById } from "../data/cardBanks";
+import { useCards } from "../context/CardsContext";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
-import type { SaveTransactionPayload, Transaction, TxType } from "../types";
+import type { PaymentMethod, SaveTransactionPayload, Transaction, TxType } from "../types";
 import { todayISO } from "../utils/format";
+import { BankLogoMark } from "./BankLogoMark";
 import { CurrencyField } from "./CurrencyField";
 
 export type DeleteRecurrenceScope = "single" | "allFuture";
 
+export type ExpensePrefill = { paymentMethod: PaymentMethod; cardId?: string };
+
 type Props = {
   editing: Transaction | null;
+  expensePrefill?: ExpensePrefill | null;
   onSave: (tx: SaveTransactionPayload) => void;
   onDelete: ((scope: DeleteRecurrenceScope) => void) | null;
   onClose: () => void;
 };
 
-export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) {
+export function TransactionModal({ editing, expensePrefill = null, onSave, onDelete, onClose }: Props) {
+  const { cards } = useCards();
   const [type, setType] = useState<TxType>(editing?.type ?? "expense");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
@@ -35,6 +43,10 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
   const [closing, setClosing] = useState(false);
   const [deleteScopeOpen, setDeleteScopeOpen] = useState(false);
   const [recurrenceScopeOpen, setRecurrenceScopeOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
+  const [selectedCardId, setSelectedCardId] = useState("");
+  const [cardPickerOpen, setCardPickerOpen] = useState(false);
+  const cardPickerRef = useRef<HTMLDivElement>(null);
 
   useBodyScrollLock(true);
 
@@ -64,9 +76,44 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
   }, [editing]);
 
   useEffect(() => {
+    if (editing) {
+      if (editing.type === "expense") {
+        setPaymentMethod(editing.paymentMethod === "card" ? "card" : "pix");
+        setSelectedCardId(editing.cardId ?? "");
+      }
+      return;
+    }
+    if (type === "expense" && expensePrefill) {
+      setPaymentMethod(expensePrefill.paymentMethod);
+      setSelectedCardId(expensePrefill.cardId ?? "");
+    } else if (!editing && type === "expense") {
+      setPaymentMethod("pix");
+      setSelectedCardId("");
+    }
+  }, [editing, type, expensePrefill]);
+
+  useEffect(() => {
     setDeleteScopeOpen(false);
     setRecurrenceScopeOpen(false);
   }, [editing]);
+
+  useEffect(() => {
+    if (paymentMethod !== "card") setCardPickerOpen(false);
+  }, [paymentMethod]);
+
+  useEffect(() => {
+    if (!cardPickerOpen) return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      const el = cardPickerRef.current;
+      if (el && !el.contains(e.target as Node)) setCardPickerOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
+  }, [cardPickerOpen]);
 
   const cats =
     type === "expense" ? EXPENSE_CATS : type === "income" ? INCOME_CATS : INVESTMENT_CATS;
@@ -85,9 +132,37 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
     else setPaid(editing.paid);
   }, [type, editing]);
 
+  const effectiveType: TxType = editing ? editing.type : type;
+
+  const hideTypeAndPayment =
+    !editing &&
+    expensePrefill != null &&
+    expensePrefill.paymentMethod === "card" &&
+    expensePrefill.cardId != null &&
+    expensePrefill.cardId !== "";
+
+  const selectedPaymentCard = useMemo(
+    () => (selectedCardId ? cards.find((c) => c.id === selectedCardId) : undefined),
+    [cards, selectedCardId],
+  );
+
+  const expensePayPart = useMemo((): Pick<SaveTransactionPayload, "paymentMethod" | "cardId"> | Record<string, never> => {
+    if (effectiveType !== "expense") return {};
+    if (paymentMethod === "card" && selectedCardId) {
+      return { paymentMethod: "card", cardId: selectedCardId };
+    }
+    return { paymentMethod: "pix" };
+  }, [effectiveType, paymentMethod, selectedCardId]);
+
+  const cardPayInvalid =
+    effectiveType === "expense" &&
+    paymentMethod === "card" &&
+    (!selectedCardId || cards.length === 0);
+
   const handleClose = useCallback(() => {
     setDeleteScopeOpen(false);
     setRecurrenceScopeOpen(false);
+    setCardPickerOpen(false);
     setClosing(true);
     setTimeout(onClose, 250);
   }, [onClose]);
@@ -109,6 +184,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
   const confirmRecurrenceFieldScope = useCallback(
     (scope: DeleteRecurrenceScope) => {
       if (!editing?.recurrenceRuleId) return;
+      if (cardPayInvalid) return;
       const val = parseFloat(String(amount).replace(",", "."));
       if (!description.trim() || Number.isNaN(val) || val <= 0) return;
       const amt = Math.round(val * 100) / 100;
@@ -125,15 +201,17 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
         recurrenceRuleId: editing.recurrenceRuleId,
         dateChangeScope: scope,
         previousDate: editing.date,
+        ...expensePayPart,
       });
       setRecurrenceScopeOpen(false);
     },
-    [editing, amount, description, date, paid, onSave],
+    [editing, amount, description, date, paid, onSave, expensePayPart, cardPayInvalid],
   );
 
   const handleSave = useCallback(() => {
     const val = parseFloat(String(amount).replace(",", "."));
     if (!description.trim() || Number.isNaN(val) || val <= 0) return;
+    if (cardPayInvalid) return;
     const amt = Math.round(val * 100) / 100;
     if (editing) {
       const pay = editing.type === "income" ? true : paid;
@@ -150,6 +228,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           id: editing.id,
           recurrenceRuleId: editing.recurrenceRuleId,
           endRecurrence: true,
+          ...expensePayPart,
         });
         return;
       }
@@ -168,6 +247,7 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
         paid: pay,
         id: editing.id,
         recurrenceRuleId: editing.recurrenceRuleId,
+        ...expensePayPart,
       });
       return;
     }
@@ -181,10 +261,10 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
       fixed: false,
       paid: payNew,
       isNewRecurring: fixed,
+      ...expensePayPart,
     });
-  }, [editing, type, description, amount, date, category, fixed, paid, onSave]);
+  }, [editing, type, description, amount, date, category, fixed, paid, onSave, expensePayPart, cardPayInvalid]);
 
-  const effectiveType: TxType = editing ? editing.type : type;
   const chipAccent =
     effectiveType === "expense" ? "#FF3B30" : effectiveType === "income" ? "#34C759" : "var(--app-accent)";
   const chipBgActive =
@@ -244,10 +324,10 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
         </div>
 
         <h2 className="text-xl font-bold mb-5" style={{ color: "var(--app-text)" }}>
-          {editing ? "Editar lançamento" : "Novo lançamento"}
+          {editing ? "Editar lançamento" : hideTypeAndPayment ? "Nova despesa" : "Novo lançamento"}
         </h2>
 
-        {editing ? null : (
+        {editing ? null : hideTypeAndPayment ? null : (
           <div
             className="grid grid-cols-3 gap-1 rounded-xl p-1 mb-5"
             style={{ backgroundColor: "var(--app-input-bg)" }}
@@ -308,6 +388,158 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
           </span>
           <CurrencyField value={amount} onChange={setAmount} placeholder="0,00" />
         </label>
+
+        {effectiveType === "expense" && !hideTypeAndPayment ? (
+          <div className="mb-4">
+            <span
+              className="text-xs font-semibold uppercase tracking-wider mb-2 block"
+              style={{ color: "var(--app-muted)" }}
+            >
+              Forma de pagamento
+            </span>
+            <div
+              className="grid grid-cols-2 gap-2 rounded-xl p-1 mb-3"
+              style={{ backgroundColor: "var(--app-input-bg)" }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentMethod("pix");
+                  setSelectedCardId("");
+                }}
+                className="py-2.5 rounded-lg text-sm font-semibold"
+                style={{
+                  backgroundColor: paymentMethod === "pix" ? "var(--app-card)" : "transparent",
+                  color: paymentMethod === "pix" ? "var(--app-text)" : "var(--app-muted)",
+                  boxShadow: paymentMethod === "pix" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                }}
+              >
+                PIX
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("card")}
+                className="py-2.5 rounded-lg text-sm font-semibold"
+                style={{
+                  backgroundColor: paymentMethod === "card" ? "var(--app-card)" : "transparent",
+                  color: paymentMethod === "card" ? "var(--app-text)" : "var(--app-muted)",
+                  boxShadow: paymentMethod === "card" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                }}
+              >
+                Cartão
+              </button>
+            </div>
+            {paymentMethod === "card" ? (
+              cards.length === 0 ? (
+                <p className="text-xs leading-relaxed" style={{ color: "var(--app-muted)" }}>
+                  Adicione um cartão em Menu → Gerenciar cartões.
+                </p>
+              ) : (
+                <div className="relative" ref={cardPickerRef}>
+                  <button
+                    type="button"
+                    id="transaction-card-picker"
+                    aria-haspopup="listbox"
+                    aria-expanded={cardPickerOpen}
+                    onClick={() => setCardPickerOpen((o) => !o)}
+                    className="flex w-full items-center gap-3 rounded-xl border border-solid py-3 px-3 text-left text-sm font-medium outline-none active:opacity-90"
+                    style={{
+                      backgroundColor: "var(--app-input-bg)",
+                      color: "var(--app-text)",
+                      borderColor: "var(--app-border)",
+                    }}
+                  >
+                    {selectedPaymentCard ? (
+                      <>
+                        <BankLogoMark bankId={selectedPaymentCard.bankId} size="xs" />
+                        <span className="min-w-0 flex-1 truncate">
+                          {selectedPaymentCard.label ||
+                            bankPresetById(selectedPaymentCard.bankId)?.label ||
+                            selectedPaymentCard.bankId}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="h-8 w-8 shrink-0" aria-hidden />
+                        <span className="min-w-0 flex-1 truncate font-medium" style={{ color: "var(--app-muted)" }}>
+                          Escolher cartão…
+                        </span>
+                      </>
+                    )}
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 transition-transform ${cardPickerOpen ? "rotate-180" : ""}`}
+                      strokeWidth={2}
+                      style={{ color: "var(--app-muted)" }}
+                      aria-hidden
+                    />
+                  </button>
+                  {cardPickerOpen ? (
+                    <ul
+                      className="absolute left-0 right-0 z-[100] mt-1 max-h-48 overflow-y-auto rounded-xl border border-solid py-1 shadow-lg"
+                      role="listbox"
+                      aria-labelledby="transaction-card-picker"
+                      style={{
+                        backgroundColor: "var(--app-card)",
+                        borderColor: "var(--app-border)",
+                        boxShadow: "var(--app-card-shadow)",
+                      }}
+                    >
+                      <li role="presentation">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selectedCardId === ""}
+                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm active:opacity-85"
+                          style={{
+                            backgroundColor: selectedCardId === "" ? "var(--app-row-active)" : "transparent",
+                            color: "var(--app-muted)",
+                          }}
+                          onClick={() => {
+                            setSelectedCardId("");
+                            setCardPickerOpen(false);
+                          }}
+                        >
+                          <span className="h-8 w-8 shrink-0" aria-hidden />
+                          <span className="font-medium">Escolher cartão…</span>
+                        </button>
+                      </li>
+                      {cards.map((c) => {
+                        const name = c.label || bankPresetById(c.bankId)?.label || c.bankId;
+                        const sel = c.id === selectedCardId;
+                        return (
+                          <li key={c.id} role="presentation">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={sel}
+                              className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm active:opacity-85"
+                              style={{
+                                backgroundColor: sel ? "var(--app-row-active)" : "transparent",
+                                color: "var(--app-text)",
+                              }}
+                              onClick={() => {
+                                setSelectedCardId(c.id);
+                                setCardPickerOpen(false);
+                              }}
+                            >
+                              <BankLogoMark bankId={c.bankId} size="xs" />
+                              <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </div>
+              )
+            ) : null}
+            {cardPayInvalid ? (
+              <p className="text-xs mt-2" style={{ color: "#FF3B30" }}>
+                Selecione um cartão para continuar.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <label className="block mb-4 w-full min-w-0 max-w-full">
           <span
@@ -461,7 +693,8 @@ export function TransactionModal({ editing, onSave, onDelete, onClose }: Props) 
         <button
           type="button"
           onClick={handleSave}
-          className="w-full py-3.5 rounded-2xl text-base font-semibold text-white active:scale-[0.98]"
+          disabled={cardPayInvalid}
+          className="w-full py-3.5 rounded-2xl text-base font-semibold text-white active:scale-[0.98] disabled:opacity-40"
           style={{
             backgroundColor: "var(--app-accent)",
             transition: "transform 0.15s cubic-bezier(0.4,0,0.2,1)",

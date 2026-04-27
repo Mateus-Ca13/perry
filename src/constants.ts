@@ -27,6 +27,7 @@ export const RECURRING_RULES_KEY = "perry_recurring_rules";
 export const RECURRING_MIGRATION_V1_KEY = "perry_recurring_migrated_v1";
 /** YYYY-MM dos meses já encerrados via "Concluir mês" (evita duplicar a sobra). */
 export const CLOSED_MONTHS_KEY = "perry_closed_months";
+export const PAYMENT_CARDS_KEY = "perry_payment_cards";
 /** Mês de hoje + os próximos, total; só gera ocorrências nessa janela. */
 export const RECURRING_WINDOW_MONTHS = 6;
 

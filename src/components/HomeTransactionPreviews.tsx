@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import type { MonthCursor, Transaction } from "../types";
-import { sliceThenGroupByDate } from "../utils/monthComputation";
-import { TransactionGroupedList } from "./TransactionGroupedList";
+import { sliceLatestTransactions } from "../utils/monthComputation";
+import { FlatTransactionList } from "./FlatTransactionList";
 
-const PREVIEW_LIMIT = 3;
+const PREVIEW_LIMIT = 5;
 
 type Props = {
   mainTransactions: Transaction[];
@@ -26,8 +26,14 @@ export function HomeTransactionPreviews({
     [mainTransactions],
   );
 
-  const entradasPreview = sliceThenGroupByDate(entradas, PREVIEW_LIMIT);
-  const saidasPreview = sliceThenGroupByDate(saidas, PREVIEW_LIMIT);
+  const entradasPreview = useMemo(
+    () => sliceLatestTransactions(entradas, PREVIEW_LIMIT),
+    [entradas],
+  );
+  const saidasPreview = useMemo(
+    () => sliceLatestTransactions(saidas, PREVIEW_LIMIT),
+    [saidas],
+  );
 
   return (
     <div className="px-5 mt-4 space-y-8">
@@ -45,9 +51,10 @@ export function HomeTransactionPreviews({
             Ver todas
           </Link>
         </div>
-        <TransactionGroupedList
-          grouped={entradasPreview}
+        <FlatTransactionList
+          transactions={entradasPreview}
           onEdit={onEdit}
+          showDayOnMeta
           emptyText="Nenhuma receita neste mês"
         />
       </section>
@@ -66,9 +73,10 @@ export function HomeTransactionPreviews({
             Ver todas
           </Link>
         </div>
-        <TransactionGroupedList
-          grouped={saidasPreview}
+        <FlatTransactionList
+          transactions={saidasPreview}
           onEdit={onEdit}
+          showDayOnMeta
           emptyText="Nenhuma despesa neste mês"
         />
       </section>

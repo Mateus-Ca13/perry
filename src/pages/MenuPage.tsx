@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { Database, Moon, Sun, Trash2 } from "lucide-react";
+import { Database, CreditCard, Moon, Sun, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { SubPageLayout } from "../components/SubPageLayout";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import { useTheme } from "../context/ThemeContext";
@@ -141,6 +142,41 @@ export function MenuPage() {
       </div>
 
       <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--app-muted)" }}>
+        Cartões
+      </p>
+      <div
+        className="rounded-2xl overflow-hidden mb-6"
+        style={{
+          backgroundColor: "var(--app-card)",
+          boxShadow: "var(--app-card-shadow)",
+        }}
+      >
+        <Link
+          to="/cartoes"
+          className="flex items-center gap-3 px-4 py-3.5 active:opacity-80"
+          style={{ borderBottom: "1px solid var(--app-border)" }}
+        >
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: "var(--app-dock-active)" }}
+          >
+            <CreditCard className="w-5 h-5" strokeWidth={2} style={{ color: "var(--app-accent)" }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>
+              Gerenciar cartões
+            </p>
+            <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--app-muted)" }}>
+              Nubank, Mercado Pago, PicPay e faturas por cartão
+            </p>
+          </div>
+          <span className="text-sm font-semibold shrink-0" style={{ color: "var(--app-accent)" }}>
+            Abrir
+          </span>
+        </Link>
+      </div>
+
+      <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: "var(--app-muted)" }}>
         Dados
       </p>
       <div
@@ -161,7 +197,7 @@ export function MenuPage() {
         <SettingsRow
           icon={Database}
           label="Importar e exportar dados"
-          description="Transações, recorrência e meses concluídos. O tema não entra no ficheiro."
+          description="Transações, recorrência, cartões e meses concluídos. O tema não entra no ficheiro."
         >
           <div className="flex flex-wrap gap-2 justify-end">
             <button

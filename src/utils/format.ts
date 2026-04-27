@@ -36,3 +36,11 @@ export function fmtHeaderToday(): string {
     year: "numeric",
   });
 }
+
+/** Rótulo curto do dia na lista da home: «Hoje», «Ontem» ou «10 de abr.». */
+export function fmtListDay(iso: string): string {
+  const rel = fmtDate(iso);
+  if (rel === "Hoje" || rel === "Ontem") return rel;
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+}

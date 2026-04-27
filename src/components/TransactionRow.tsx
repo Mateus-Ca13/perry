@@ -1,15 +1,21 @@
+import { useMemo } from "react";
 import { Repeat } from "lucide-react";
+import { useCards } from "../context/CardsContext";
+import { bankPresetById } from "../data/cardBanks";
 import { getCatInfo } from "../utils/categories";
-import { fmt } from "../utils/format";
+import { fmt, fmtListDay } from "../utils/format";
 import type { Transaction } from "../types";
 
 type Props = {
   tx: Transaction;
   isLast: boolean;
   onTap: () => void;
+  /** Lista contínua na home: mostra o dia na linha de meta. */
+  showDayOnMeta?: boolean;
 };
 
-export function TransactionRow({ tx, isLast, onTap }: Props) {
+export function TransactionRow({ tx, isLast, onTap, showDayOnMeta }: Props) {
+  const { cards } = useCards();
   const cat = getCatInfo(tx.category);
   const isIncome = tx.type === "income";
   const isInvestment = tx.type === "investment";
@@ -22,13 +28,38 @@ export function TransactionRow({ tx, isLast, onTap }: Props) {
       ? "color-mix(in srgb, var(--app-accent) 14%, transparent)"
       : "rgba(255,59,48,0.1)";
 
+  const subtitleExtra = useMemo(() => {
+    if (tx.type !== "expense") return null;
+    if (tx.paymentMethod === "card" && tx.cardId) {
+      const c = cards.find((x) => x.id === tx.cardId);
+      const name = c ? c.label || bankPresetById(c.bankId)?.label : null;
+      return name ? `Cartão · ${name}` : "Cartão";
+    }
+    return "PIX";
+  }, [tx.type, tx.paymentMethod, tx.cardId, cards]);
+
+  const dayMetaPrefix = useMemo(() => {
+    if (!showDayOnMeta || (tx.type !== "income" && tx.type !== "expense")) return null;
+    return fmtListDay(tx.date);
+  }, [showDayOnMeta, tx.date, tx.type]);
+
+  const metaLine = useMemo(() => {
+    const base = isInvestment
+      ? `Investimento · ${cat.label}`
+      : tx.type === "expense" && subtitleExtra
+        ? `${cat.label} · ${subtitleExtra}`
+        : cat.label;
+    if (dayMetaPrefix) return `${dayMetaPrefix} · ${base}`;
+    return base;
+  }, [isInvestment, tx.type, cat.label, subtitleExtra, dayMetaPrefix]);
+
   const showStatusBadge = tx.type === "expense" || tx.type === "investment";
 
   return (
     <button
       type="button"
       onClick={onTap}
-      className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-[var(--app-row-active)]"
+      className={`w-full flex items-center gap-3 px-4 text-left active:bg-[var(--app-row-active)] ${showDayOnMeta ? "py-4" : "py-3"}`}
       style={{
         borderBottom: isLast ? "none" : "1px solid var(--app-border)",
         transition: "background-color 0.1s ease",
@@ -78,7 +109,7 @@ export function TransactionRow({ tx, isLast, onTap }: Props) {
           ) : null}
         </div>
         <p className="text-xs" style={{ color: "var(--app-muted)" }}>
-          {isInvestment ? `Investimento · ${cat.label}` : cat.label}
+          {metaLine}
         </p>
       </div>
       <p
