@@ -1,0 +1,256 @@
+{
+  "perryExportVersion": 1,
+  "exportedAt": "2026-04-27T12:44:40.440Z",
+  "transactions": [
+    {
+      "id": "moflxlr74rjxho",
+      "type": "income",
+      "description": "salario",
+      "amount": 400,
+      "date": "2026-04-26",
+      "category": "salario",
+      "fixed": false,
+      "paid": true,
+      "recurrenceRuleId": "moflxlr6t5ade8"
+    },
+    {
+      "id": "moflxlrlycwx5i",
+      "type": "income",
+      "description": "salario",
+      "amount": 400,
+      "date": "2026-05-26",
+      "category": "salario",
+      "fixed": false,
+      "paid": true,
+      "recurrenceRuleId": "moflxlr6t5ade8"
+    },
+    {
+      "id": "moflxlrlvwvjw6",
+      "type": "income",
+      "description": "salario",
+      "amount": 400,
+      "date": "2026-06-26",
+      "category": "salario",
+      "fixed": false,
+      "paid": true,
+      "recurrenceRuleId": "moflxlr6t5ade8"
+    },
+    {
+      "id": "moflxlrm8k1u18",
+      "type": "income",
+      "description": "salario",
+      "amount": 400,
+      "date": "2026-07-26",
+      "category": "salario",
+      "fixed": false,
+      "paid": true,
+      "recurrenceRuleId": "moflxlr6t5ade8"
+    },
+    {
+      "id": "moflxlrmv5nuvd",
+      "type": "income",
+      "description": "salario",
+      "amount": 400,
+      "date": "2026-08-26",
+      "category": "salario",
+      "fixed": false,
+      "paid": true,
+      "recurrenceRuleId": "moflxlr6t5ade8"
+    },
+    {
+      "id": "moflxlrmg6thag",
+      "type": "income",
+      "description": "salario",
+      "amount": 400,
+      "date": "2026-09-26",
+      "category": "salario",
+      "fixed": false,
+      "paid": true,
+      "recurrenceRuleId": "moflxlr6t5ade8"
+    },
+    {
+      "id": "moflydxvifns1s",
+      "type": "expense",
+      "description": "contas",
+      "amount": 50,
+      "date": "2026-04-26",
+      "category": "alimentacao",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "moflydxvitpzfk"
+    },
+    {
+      "id": "moflydy8hml8up",
+      "type": "expense",
+      "description": "contas",
+      "amount": 50,
+      "date": "2026-05-26",
+      "category": "alimentacao",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "moflydxvitpzfk"
+    },
+    {
+      "id": "moflydy89v601s",
+      "type": "expense",
+      "description": "contas",
+      "amount": 50,
+      "date": "2026-06-26",
+      "category": "alimentacao",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "moflydxvitpzfk"
+    },
+    {
+      "id": "moflydy87t5tp1",
+      "type": "expense",
+      "description": "contas",
+      "amount": 50,
+      "date": "2026-07-26",
+      "category": "alimentacao",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "moflydxvitpzfk"
+    },
+    {
+      "id": "moflydy8g0rxl8",
+      "type": "expense",
+      "description": "contas",
+      "amount": 50,
+      "date": "2026-08-26",
+      "category": "alimentacao",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "moflydxvitpzfk"
+    },
+    {
+      "id": "moflydy8rxusdd",
+      "type": "expense",
+      "description": "contas",
+      "amount": 50,
+      "date": "2026-09-26",
+      "category": "alimentacao",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "moflydxvitpzfk"
+    },
+    {
+      "id": "mofm0wicdzprt5",
+      "type": "investment",
+      "description": "investimento",
+      "amount": 350,
+      "date": "2026-04-26",
+      "category": "inv_rf",
+      "fixed": false,
+      "paid": true,
+      "recurrenceRuleId": "mofm0wibk0hwm3"
+    },
+    {
+      "id": "mofm0wim92hitl",
+      "type": "investment",
+      "description": "investimento",
+      "amount": 300,
+      "date": "2026-07-26",
+      "category": "inv_rf",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "mofm0wibk0hwm3"
+    },
+    {
+      "id": "mofm0wimaim3ee",
+      "type": "investment",
+      "description": "investimento",
+      "amount": 300,
+      "date": "2026-08-26",
+      "category": "inv_rf",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "mofm0wibk0hwm3"
+    },
+    {
+      "id": "mofm0wimbg1yye",
+      "type": "investment",
+      "description": "investimento",
+      "amount": 300,
+      "date": "2026-09-26",
+      "category": "inv_rf",
+      "fixed": false,
+      "paid": false,
+      "recurrenceRuleId": "mofm0wibk0hwm3"
+    },
+    {
+      "id": "moh6u9l5la8c90",
+      "type": "expense",
+      "description": "teste",
+      "amount": 0.11,
+      "date": "2026-03-27",
+      "category": "alimentacao",
+      "fixed": false,
+      "paid": false
+    },
+    {
+      "id": "moh6um61rmt6fi",
+      "type": "income",
+      "description": "assa",
+      "amount": 23.33,
+      "date": "2026-03-27",
+      "category": "salario",
+      "fixed": false,
+      "paid": true
+    },
+    {
+      "id": "moh6up8xngngdo",
+      "type": "income",
+      "description": "Sobra de Março",
+      "amount": 23.22,
+      "date": "2026-04-01",
+      "category": "extra",
+      "fixed": false,
+      "paid": true
+    }
+  ],
+  "recurringRules": [
+    {
+      "id": "moflxlr6t5ade8",
+      "type": "income",
+      "dayOfMonth": 26,
+      "startMonth": "2026-04",
+      "description": "salario",
+      "category": "salario",
+      "defaultAmount": 400,
+      "defaultPaid": true,
+      "active": true,
+      "excludedMonths": []
+    },
+    {
+      "id": "moflydxvitpzfk",
+      "type": "expense",
+      "dayOfMonth": 26,
+      "startMonth": "2026-04",
+      "description": "contas",
+      "category": "alimentacao",
+      "defaultAmount": 50,
+      "defaultPaid": false,
+      "active": true,
+      "excludedMonths": []
+    },
+    {
+      "id": "mofm0wibk0hwm3",
+      "type": "investment",
+      "dayOfMonth": 26,
+      "startMonth": "2026-04",
+      "description": "investimento",
+      "category": "inv_rf",
+      "defaultAmount": 300,
+      "defaultPaid": false,
+      "active": true,
+      "excludedMonths": [
+        "2026-05",
+        "2026-06"
+      ]
+    }
+  ],
+  "closedMonths": [
+    "2026-03"
+  ]
+}

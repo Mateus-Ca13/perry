@@ -1,4 +1,5 @@
 import {
+  CLOSED_MONTHS_KEY,
   RECURRING_MIGRATION_V1_KEY,
   RECURRING_RULES_KEY,
   STORAGE_KEY,
@@ -12,7 +13,7 @@ import {
   pruneInactiveRecurrenceTxs,
 } from "./recurringMaterialize";
 
-function normalizeTransaction(raw: unknown): Transaction | null {
+export function normalizeTransaction(raw: unknown): Transaction | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   const id = typeof o.id === "string" ? o.id : "";
@@ -128,7 +129,46 @@ export function clearAllAppDataStorage(): void {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(RECURRING_RULES_KEY);
     localStorage.removeItem(RECURRING_MIGRATION_V1_KEY);
+    localStorage.removeItem(CLOSED_MONTHS_KEY);
   } catch {
     /* privado, quota, etc. */
+  }
+}
+
+const YM_RE = /^\d{4}-\d{2}$/;
+
+/** Lista de YYYY-MM já “concluídos” (registo da sobra no mês seguinte). */
+export function loadClosedMonths(): string[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CLOSED_MONTHS_KEY);
+    if (raw == null || raw === "") return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is string => typeof x === "string" && YM_RE.test(x));
+  } catch {
+    return [];
+  }
+}
+
+export function appendClosedMonth(ym: string): void {
+  if (typeof localStorage === "undefined" || !YM_RE.test(ym)) return;
+  try {
+    const list = loadClosedMonths();
+    if (list.includes(ym)) return;
+    localStorage.setItem(CLOSED_MONTHS_KEY, JSON.stringify([...list, ym]));
+  } catch {
+    /* quota */
+  }
+}
+
+/** Substitui a lista de meses concluídos (ex.: restauração de backup). */
+export function saveClosedMonthsList(months: string[]): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const valid = months.filter((m) => YM_RE.test(m));
+    localStorage.setItem(CLOSED_MONTHS_KEY, JSON.stringify([...new Set(valid)].sort()));
+  } catch {
+    /* quota */
   }
 }

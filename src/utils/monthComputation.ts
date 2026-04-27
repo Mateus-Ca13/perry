@@ -5,6 +5,10 @@ export function nowMonthCursor(): MonthCursor {
   return { year: d.getFullYear(), month: d.getMonth() };
 }
 
+export function monthCursorToYm(c: MonthCursor): string {
+  return `${c.year}-${String(c.month + 1).padStart(2, "0")}`;
+}
+
 /**
  * Mês visto (YYYY-MM) estritamente antes do mês de hoje — ex. concluir abril só
  * depois de 1 de maio.

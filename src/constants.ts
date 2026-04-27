@@ -25,6 +25,8 @@ export const STORAGE_KEY = "perry_transactions";
 export const RECURRING_RULES_KEY = "perry_recurring_rules";
 /** Migração one-shot de projeção `fixed` → regras + ocorrências. */
 export const RECURRING_MIGRATION_V1_KEY = "perry_recurring_migrated_v1";
+/** YYYY-MM dos meses já encerrados via "Concluir mês" (evita duplicar a sobra). */
+export const CLOSED_MONTHS_KEY = "perry_closed_months";
 /** Mês de hoje + os próximos, total; só gera ocorrências nessa janela. */
 export const RECURRING_WINDOW_MONTHS = 6;
 

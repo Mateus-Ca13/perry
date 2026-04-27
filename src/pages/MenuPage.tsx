@@ -1,8 +1,9 @@
-import { useCallback, useState, type ReactNode } from "react";
-import { Moon, Sun, Trash2 } from "lucide-react";
+import { useCallback, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { Database, Moon, Sun, Trash2 } from "lucide-react";
 import { SubPageLayout } from "../components/SubPageLayout";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import { useTheme } from "../context/ThemeContext";
+import { downloadPerryBackupFile, importPerryBackupFromObject } from "../utils/backup";
 import { clearAllAppDataStorage } from "../utils/storage";
 
 function SettingsRow({
@@ -46,13 +47,58 @@ export function MenuPage() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const [clearOpen, setClearOpen] = useState(false);
-  useBodyScrollLock(clearOpen);
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [pendingImportJson, setPendingImportJson] = useState<unknown>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  useBodyScrollLock(clearOpen || importConfirmOpen);
 
   const onConfirmClear = useCallback(() => {
     clearAllAppDataStorage();
     setClearOpen(false);
     window.location.replace("/");
   }, []);
+
+  const onPickImportFile = useCallback(() => {
+    setImportError(null);
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileInputChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    setImportError(null);
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result ?? "");
+        const parsed: unknown = JSON.parse(text);
+        setPendingImportJson(parsed);
+        setImportConfirmOpen(true);
+      } catch {
+        setImportError("Ficheiro JSON inválido ou corrompido.");
+      }
+    };
+    reader.onerror = () => {
+      setImportError("Não foi possível ler o ficheiro.");
+    };
+    reader.readAsText(file, "utf-8");
+  }, []);
+
+  const onConfirmImport = useCallback(() => {
+    if (pendingImportJson == null) return;
+    const result = importPerryBackupFromObject(pendingImportJson);
+    if (!result.ok) {
+      setImportError(result.error);
+      setImportConfirmOpen(false);
+      setPendingImportJson(null);
+      return;
+    }
+    setImportConfirmOpen(false);
+    setPendingImportJson(null);
+    window.location.reload();
+  }, [pendingImportJson]);
 
   return (
     <SubPageLayout title="Menu">
@@ -104,9 +150,56 @@ export function MenuPage() {
           boxShadow: "var(--app-card-shadow)",
         }}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="sr-only"
+          aria-hidden
+          onChange={onFileInputChange}
+        />
+        <SettingsRow
+          icon={Database}
+          label="Importar e exportar dados"
+          description="Transações, recorrência e meses concluídos. O tema não entra no ficheiro."
+        >
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setImportError(null);
+                downloadPerryBackupFile();
+              }}
+              className="shrink-0 text-sm font-semibold px-3 py-2 rounded-xl active:opacity-70"
+              style={{
+                color: "var(--app-accent)",
+                backgroundColor: "color-mix(in srgb, var(--app-accent) 12%, transparent)",
+              }}
+            >
+              Exportar
+            </button>
+            <button
+              type="button"
+              onClick={onPickImportFile}
+              className="shrink-0 text-sm font-semibold px-3 py-2 rounded-xl active:opacity-70"
+              style={{ color: "var(--app-text)", backgroundColor: "var(--app-input-bg)" }}
+            >
+              Importar
+            </button>
+          </div>
+        </SettingsRow>
+        {importError ? (
+          <p
+            className="px-4 pb-3 text-xs leading-relaxed -mt-1"
+            style={{ color: "#FF3B30" }}
+            role="alert"
+          >
+            {importError}
+          </p>
+        ) : null}
         <div
           className="flex items-center gap-3 px-4 py-3.5"
-          style={{ borderBottom: "1px solid var(--app-border)" }}
+          style={importError ? { borderTop: "1px solid var(--app-border)" } : undefined}
         >
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
@@ -153,6 +246,54 @@ export function MenuPage() {
           </p>
         </div>
       </div>
+
+      {importConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center p-5"
+          style={{ backgroundColor: "var(--app-modal-scrim)" }}
+          onClick={() => {
+            setImportConfirmOpen(false);
+            setPendingImportJson(null);
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-labelledby="import-title"
+            className="w-full max-w-sm rounded-2xl p-5 shadow-xl"
+            style={{ backgroundColor: "var(--app-card)", boxShadow: "var(--app-card-shadow)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="import-title" className="text-lg font-bold mb-2" style={{ color: "var(--app-text)" }}>
+              Substituir dados com este backup?
+            </h2>
+            <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--app-muted)" }}>
+              Isto apaga o que está no armazenamento local e aplica o conteúdo do ficheiro. A
+              preferência de tema não muda. Não dá para desfazer.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setImportConfirmOpen(false);
+                  setPendingImportJson(null);
+                }}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold active:scale-[0.98]"
+                style={{ backgroundColor: "var(--app-input-bg)", color: "var(--app-text)" }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={onConfirmImport}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white active:scale-[0.98]"
+                style={{ backgroundColor: "var(--app-accent)" }}
+              >
+                Restaurar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {clearOpen ? (
         <div

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { MONTHS_PT } from "../constants";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import type { MonthCursor, Transaction } from "../types";
@@ -21,10 +21,12 @@ export function CloseMonthModal({ viewedMonth, suggestedBalance, onSave, onClose
   );
   const [description, setDescription] = useState(`Sobra de ${MONTHS_PT[viewedMonth.month]}`);
   const [closing, setClosing] = useState(false);
+  const submitLock = useRef(false);
 
   useBodyScrollLock(true);
 
   useEffect(() => {
+    submitLock.current = false;
     setAmount(suggestedBalance > 0 ? String(suggestedBalance) : "");
     setDescription(`Sobra de ${MONTHS_PT[viewedMonth.month]}`);
   }, [suggestedBalance, viewedMonth.month, viewedMonth.year]);
@@ -35,8 +37,10 @@ export function CloseMonthModal({ viewedMonth, suggestedBalance, onSave, onClose
   }, [onClose]);
 
   const handleSubmit = useCallback(() => {
+    if (submitLock.current) return;
     const val = parseFloat(String(amount).replace(",", "."));
     if (!description.trim() || Number.isNaN(val) || val <= 0) return;
+    submitLock.current = true;
     onSave({
       type: "income",
       description: description.trim(),

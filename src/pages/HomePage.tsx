@@ -13,10 +13,12 @@ import {
   computeSummary,
   isViewedMonthBeforeCurrentMonth,
   listInvestmentsMonth,
+  monthCursorToYm,
   nowMonthCursor,
   partitionMonthForHome,
   selectMonthTransactions,
 } from "../utils/monthComputation";
+import { appendClosedMonth, loadClosedMonths } from "../utils/storage";
 import { isMonthBeyondRecurringWindow } from "../utils/recurringMaterialize";
 import { CalendarCheck } from "lucide-react";
 
@@ -24,6 +26,7 @@ export function HomePage() {
   const { transactions, openEdit, addTransaction } = useTransactions();
   const [currentMonth, setCurrentMonth] = useState<MonthCursor>(nowMonthCursor);
   const [showCloseMonth, setShowCloseMonth] = useState(false);
+  const [closedMonths, setClosedMonths] = useState<string[]>(loadClosedMonths);
 
   const today = todayISO();
 
@@ -57,9 +60,19 @@ export function HomePage() {
     [currentMonth, today],
   );
 
+  const viewedYm = useMemo(() => monthCursorToYm(currentMonth), [currentMonth]);
+  const monthAlreadyConcluded = useMemo(
+    () => closedMonths.includes(viewedYm),
+    [closedMonths, viewedYm],
+  );
+
   useEffect(() => {
     if (!showConcludeMonth) setShowCloseMonth(false);
   }, [showConcludeMonth]);
+
+  useEffect(() => {
+    if (monthAlreadyConcluded) setShowCloseMonth(false);
+  }, [monthAlreadyConcluded]);
 
   const prevMonth = useCallback(() => {
     setCurrentMonth((p) => {
@@ -89,26 +102,40 @@ export function HomePage() {
 
           {showConcludeMonth ? (
             <div className="px-5 mt-3">
-              <button
-                type="button"
-                onClick={() => setShowCloseMonth(true)}
-                className="w-full py-3 rounded-2xl text-md font-semibold active:scale-[0.99]"
-                style={{
-                  backgroundColor: "var(--app-card)",
-                  color: "var(--app-accent)",
-                  boxShadow: "var(--app-card-shadow)",
-                  border: "1px solid color-mix(in srgb, var(--app-accent) 25%, transparent)",
-                }}
-              >
-                <div className="flex items-center gap-2 justify-center">
-                  <CalendarCheck
-                    className="w-4 h-4"
-                    strokeWidth={2.5}
-                    style={{ color: "var(--app-accent)" }}
-                  />
-                  Concluir mês — Registrar sobra
+              {monthAlreadyConcluded ? (
+                <div
+                  className="w-full py-3 rounded-2xl text-sm font-medium text-center"
+                  style={{
+                    backgroundColor: "var(--app-card)",
+                    color: "var(--app-muted)",
+                    boxShadow: "var(--app-card-shadow)",
+                    border: "1px solid color-mix(in srgb, var(--app-text) 8%, transparent)",
+                  }}
+                >
+                  Mês já concluído — a sobra deste mês já foi registrada
                 </div>
-              </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowCloseMonth(true)}
+                  className="w-full py-3 rounded-2xl text-md font-semibold active:scale-[0.99]"
+                  style={{
+                    backgroundColor: "var(--app-card)",
+                    color: "var(--app-accent)",
+                    boxShadow: "var(--app-card-shadow)",
+                    border: "1px solid color-mix(in srgb, var(--app-accent) 25%, transparent)",
+                  }}
+                >
+                  <div className="flex items-center gap-2 justify-center">
+                    <CalendarCheck
+                      className="w-4 h-4"
+                      strokeWidth={2.5}
+                      style={{ color: "var(--app-accent)" }}
+                    />
+                    Concluir mês — Registrar sobra
+                  </div>
+                </button>
+              )}
             </div>
           ) : null}
 
@@ -118,12 +145,16 @@ export function HomePage() {
             onEdit={openEdit}
           />
 
-          {showCloseMonth ? (
+          {showCloseMonth && !monthAlreadyConcluded ? (
             <CloseMonthModal
               viewedMonth={currentMonth}
               suggestedBalance={summary.balance}
               onSave={(tx) => {
                 addTransaction(tx);
+                appendClosedMonth(viewedYm);
+                setClosedMonths((prev) =>
+                  prev.includes(viewedYm) ? prev : [...prev, viewedYm],
+                );
                 setShowCloseMonth(false);
               }}
               onClose={() => setShowCloseMonth(false)}
