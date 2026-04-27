@@ -175,6 +175,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
         id,
         dateChangeScope,
         previousDate,
+        previousAmount,
         ...data
       } = raw;
 
@@ -277,6 +278,12 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
           previousDate &&
           (dateChangeScope === "single" || dateChangeScope === "allFuture")
         ) {
+          const paymentOnly =
+            data.type === "expense" &&
+            data.date === previousDate &&
+            previousAmount !== undefined &&
+            Math.abs(data.amount - previousAmount) < 0.000_01;
+
           if (dateChangeScope === "single") {
             const prevYm = previousDate.slice(0, 7);
             const newYm = data.date.slice(0, 7);
@@ -300,6 +307,28 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
               fixed: false,
             };
             updateTransaction(tx);
+          } else if (paymentOnly) {
+            const pm = (data.paymentMethod === "card" ? "card" : "pix") as PaymentMethod;
+            const cid =
+              data.paymentMethod === "card" && data.cardId ? data.cardId : undefined;
+            setRecurringRules((rules) =>
+              rules.map((r) =>
+                r.id === data.recurrenceRuleId
+                  ? { ...r, defaultPaymentMethod: pm, defaultCardId: cid }
+                  : r,
+              ),
+            );
+            setTransactions((prev) =>
+              prev.map((t) => {
+                if (t.recurrenceRuleId !== data.recurrenceRuleId) return t;
+                if (t.date < previousDate) return t;
+                return {
+                  ...t,
+                  paymentMethod: pm,
+                  cardId: cid,
+                };
+              }),
+            );
           } else {
             const newDay = dayOfMonthFromIso(data.date);
             const expenseRulePatch =

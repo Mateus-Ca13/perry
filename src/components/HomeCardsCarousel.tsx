@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { CardBankId, MonthCursor, PaymentCard, Transaction } from "../types";
@@ -13,6 +13,127 @@ const CARD_FACE_GRADIENT: Record<CardBankId, string> = {
   mercado_pago: "linear-gradient(148deg, #005a8c 0%, #009ee3 46%, #4ec8f5 100%)",
   picpay: "linear-gradient(148deg, #0b6e38 0%, #21c25e 46%, #4fe085 100%)",
 };
+
+const TAP_CANCEL_PX2 = 12 * 12;
+
+/** Cartão do carrossel: não abre o diálogo se o dedo se moveu (scroll da página ou arrasto horizontal). */
+function CarouselCardFace({
+  card,
+  displayName,
+  invoice,
+  onOpen,
+}: {
+  card: PaymentCard;
+  displayName: string;
+  invoice: number;
+  onOpen: (c: PaymentCard) => void;
+}) {
+  const tapRef = useRef<{ x: number; y: number } | null>(null);
+  const cancelTapRef = useRef(false);
+
+  const onPointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    tapRef.current = { x: e.clientX, y: e.clientY };
+    cancelTapRef.current = false;
+  }, []);
+
+  const onPointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    const s = tapRef.current;
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    if (dx * dx + dy * dy > TAP_CANCEL_PX2) cancelTapRef.current = true;
+  }, []);
+
+  const onPointerUp = useCallback(() => {
+    tapRef.current = null;
+  }, []);
+
+  const onClick = useCallback(() => {
+    if (cancelTapRef.current) {
+      cancelTapRef.current = false;
+      return;
+    }
+    onOpen(card);
+  }, [card, onOpen]);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(card);
+        }
+      }}
+      className="relative w-full max-w-full cursor-pointer overflow-hidden rounded-2xl text-left shadow-lg outline-none active:scale-[0.99] active:opacity-95 transition-[transform,opacity] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-[var(--app-page)]"
+      style={{
+        aspectRatio: "1.586",
+        background: CARD_FACE_GRADIENT[card.bankId],
+        boxShadow: "0 10px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.22)",
+        touchAction: "manipulation",
+      }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.35]"
+        style={{
+          background:
+            "linear-gradient(125deg, rgba(255,255,255,0.55) 0%, transparent 38%, transparent 62%, rgba(0,0,0,0.08) 100%)",
+        }}
+      />
+      <div className="pointer-events-none absolute -right-6 -top-6 flex opacity-40">
+        <span className="h-16 w-16 rounded-full bg-white" style={{ marginRight: -14 }} />
+        <span className="h-16 w-16 rounded-full bg-white" />
+      </div>
+
+      <div className="relative z-10 flex h-full min-h-0 flex-col p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-2">
+          <div
+            aria-hidden
+            className="h-9 w-11 shrink-0 rounded-md shadow-md"
+            style={{
+              background: "linear-gradient(135deg, #f5e6a8 0%, #d4a934 42%, #8a6a1d 100%)",
+            }}
+          />
+          <div className="rounded-xl bg-white/22 p-0.5 shadow-sm backdrop-blur-sm">
+            <BankLogoMark bankId={card.bankId} size="sm" />
+          </div>
+        </div>
+
+        <div className="mt-auto flex min-w-0 flex-col gap-3 pt-2">
+          <div>
+            <p
+              className="text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: "rgba(255,255,255,0.78)" }}
+            >
+              Fatura
+            </p>
+            <p
+              className="text-2xl font-bold tabular-nums tracking-tight text-white"
+              style={{ textShadow: "0 1px 2px rgba(0,0,0,0.18)" }}
+            >
+              {fmt(invoice)}
+            </p>
+          </div>
+          <p
+            className="min-w-0 border-t pt-3 text-lg font-bold uppercase leading-snug tracking-wide text-white"
+            style={{
+              borderColor: "rgba(255,255,255,0.28)",
+              textShadow: "0 1px 2px rgba(0,0,0,0.2)",
+            }}
+          >
+            <span className="line-clamp-2">{displayName}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   cards: PaymentCard[];
@@ -135,7 +256,7 @@ export function HomeCardsCarousel({
           style={{
             scrollSnapType: "x mandatory",
             WebkitOverflowScrolling: "touch",
-            touchAction: "pan-x pinch-zoom",
+            touchAction: "pan-x pan-y pinch-zoom",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
           }}
@@ -151,80 +272,12 @@ export function HomeCardsCarousel({
                   scrollSnapStop: "always",
                 }}
               >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onPick(card)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onPick(card);
-                    }
-                  }}
-                  className="relative w-full max-w-full cursor-pointer overflow-hidden rounded-2xl text-left shadow-lg outline-none active:scale-[0.99] active:opacity-95 transition-[transform,opacity] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-[var(--app-page)]"
-                  style={{
-                    aspectRatio: "1.586",
-                    background: CARD_FACE_GRADIENT[card.bankId],
-                    boxShadow: "0 10px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.22)",
-                  }}
-                >
-                  <div
-                    className="pointer-events-none absolute inset-0 opacity-[0.35]"
-                    style={{
-                      background:
-                        "linear-gradient(125deg, rgba(255,255,255,0.55) 0%, transparent 38%, transparent 62%, rgba(0,0,0,0.08) 100%)",
-                    }}
-                  />
-                  <div className="pointer-events-none absolute -right-6 -top-6 flex opacity-40">
-                    <span
-                      className="h-16 w-16 rounded-full bg-white"
-                      style={{ marginRight: -14 }}
-                    />
-                    <span className="h-16 w-16 rounded-full bg-white" />
-                  </div>
-
-                  <div className="relative z-10 flex h-full min-h-0 flex-col p-4 sm:p-5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div
-                        aria-hidden
-                        className="h-9 w-11 shrink-0 rounded-md shadow-md"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #f5e6a8 0%, #d4a934 42%, #8a6a1d 100%)",
-                        }}
-                      />
-                      <div className="rounded-xl bg-white/22 p-0.5 shadow-sm backdrop-blur-sm">
-                        <BankLogoMark bankId={card.bankId} size="sm" />
-                      </div>
-                    </div>
-
-                    <div className="mt-auto flex min-w-0 flex-col gap-3 pt-2">
-                      <div>
-                        <p
-                          className="text-[10px] font-semibold uppercase tracking-widest"
-                          style={{ color: "rgba(255,255,255,0.78)" }}
-                        >
-                          Fatura
-                        </p>
-                        <p
-                          className="text-2xl font-bold tabular-nums tracking-tight text-white"
-                          style={{ textShadow: "0 1px 2px rgba(0,0,0,0.18)" }}
-                        >
-                          {fmt(invoice)}
-                        </p>
-                      </div>
-                      <p
-                        className="min-w-0 border-t pt-3 text-lg font-bold uppercase leading-snug tracking-wide text-white"
-                        style={{
-                          borderColor: "rgba(255,255,255,0.28)",
-                          textShadow: "0 1px 2px rgba(0,0,0,0.2)",
-                        }}
-                      >
-                        <span className="line-clamp-2">{displayName}</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <CarouselCardFace
+                  card={card}
+                  displayName={displayName}
+                  invoice={invoice}
+                  onOpen={onPick}
+                />
               </div>
             );
           })}

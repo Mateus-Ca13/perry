@@ -47,6 +47,10 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
   const [selectedCardId, setSelectedCardId] = useState("");
   const [cardPickerOpen, setCardPickerOpen] = useState(false);
   const cardPickerRef = useRef<HTMLDivElement>(null);
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const [sheetDragging, setSheetDragging] = useState(false);
+  const sheetDragActiveRef = useRef(false);
+  const sheetDragStartY = useRef(0);
 
   useBodyScrollLock(true);
 
@@ -95,6 +99,9 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
   useEffect(() => {
     setDeleteScopeOpen(false);
     setRecurrenceScopeOpen(false);
+    setSheetDragY(0);
+    setSheetDragging(false);
+    sheetDragActiveRef.current = false;
   }, [editing]);
 
   useEffect(() => {
@@ -159,10 +166,26 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
     paymentMethod === "card" &&
     (!selectedCardId || cards.length === 0);
 
+  const paymentChangedFromEditing = useMemo(() => {
+    if (!editing || editing.type !== "expense") return false;
+    if (!("paymentMethod" in expensePayPart)) return false;
+    const curPm = editing.paymentMethod === "card" ? "card" : "pix";
+    const curCid = editing.cardId ?? "";
+    const nextPm = expensePayPart.paymentMethod === "card" ? "card" : "pix";
+    const nextCid =
+      expensePayPart.paymentMethod === "card" && "cardId" in expensePayPart && expensePayPart.cardId
+        ? expensePayPart.cardId
+        : "";
+    return curPm !== nextPm || curCid !== nextCid;
+  }, [editing, expensePayPart]);
+
   const handleClose = useCallback(() => {
     setDeleteScopeOpen(false);
     setRecurrenceScopeOpen(false);
     setCardPickerOpen(false);
+    setSheetDragY(0);
+    setSheetDragging(false);
+    sheetDragActiveRef.current = false;
     setClosing(true);
     setTimeout(onClose, 250);
   }, [onClose]);
@@ -201,6 +224,7 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
         recurrenceRuleId: editing.recurrenceRuleId,
         dateChangeScope: scope,
         previousDate: editing.date,
+        previousAmount: editing.amount,
         ...expensePayPart,
       });
       setRecurrenceScopeOpen(false);
@@ -233,7 +257,10 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
         return;
       }
       const amountChanged = Math.abs(amt - editing.amount) > 0.000_01;
-      if (editing.recurrenceRuleId && (date !== editing.date || amountChanged)) {
+      if (
+        editing.recurrenceRuleId &&
+        (date !== editing.date || amountChanged || paymentChangedFromEditing)
+      ) {
         setRecurrenceScopeOpen(true);
         return;
       }
@@ -263,7 +290,41 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
       isNewRecurring: fixed,
       ...expensePayPart,
     });
-  }, [editing, type, description, amount, date, category, fixed, paid, onSave, expensePayPart, cardPayInvalid]);
+  }, [editing, type, description, amount, date, category, fixed, paid, onSave, expensePayPart, cardPayInvalid, paymentChangedFromEditing]);
+
+  const onSheetHandlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (closing) return;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      sheetDragActiveRef.current = true;
+      setSheetDragging(true);
+      sheetDragStartY.current = e.clientY;
+    },
+    [closing],
+  );
+
+  const onSheetHandlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!sheetDragActiveRef.current) return;
+    const d = e.clientY - sheetDragStartY.current;
+    setSheetDragY(Math.max(0, d));
+  }, []);
+
+  const onSheetHandlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!sheetDragActiveRef.current) return;
+      sheetDragActiveRef.current = false;
+      setSheetDragging(false);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* liberado */
+      }
+      const d = e.clientY - sheetDragStartY.current;
+      setSheetDragY(0);
+      if (d > 100) handleClose();
+    },
+    [handleClose],
+  );
 
   const chipAccent =
     effectiveType === "expense" ? "#FF3B30" : effectiveType === "income" ? "#34C759" : "var(--app-accent)";
@@ -295,8 +356,8 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ touchAction: "none" }}>
       <div
-        className="absolute inset-0"
-        onClick={handleClose}
+        className="absolute inset-0 pointer-events-auto"
+        aria-hidden
         style={{
           backgroundColor: "var(--app-modal-scrim)",
           backdropFilter: "blur(8px)",
@@ -307,21 +368,44 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
       />
 
       <div
-        className="relative w-full min-w-0 max-w-lg overflow-x-hidden rounded-t-3xl px-5 pt-3 pb-8 z-10"
+        className="relative z-10 flex w-full min-w-0 max-w-lg flex-col overflow-hidden rounded-t-3xl shadow-lg"
         style={{
           backgroundColor: "var(--app-card)",
-          maxHeight: "92vh",
-          overflowY: "auto",
-          touchAction: "auto",
-          WebkitOverflowScrolling: "touch",
+          maxHeight: "min(88vh, 640px)",
+          touchAction: "none",
           animation: closing
             ? "slideUp 0.25s cubic-bezier(0.4,0,1,1) reverse forwards"
             : "slideUp 0.35s cubic-bezier(0.16,1,0.3,1)",
         }}
       >
-        <div className="flex justify-center mb-4">
-          <div className="w-9 h-1 rounded-full" style={{ backgroundColor: "var(--app-handlebar)" }} />
-        </div>
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          style={{
+            transform: `translateY(${sheetDragY}px)`,
+            transition: sheetDragging
+              ? "none"
+              : "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <div
+            className="flex shrink-0 cursor-grab touch-none select-none justify-center pt-3 pb-2 active:cursor-grabbing"
+            style={{ touchAction: "none" }}
+            onPointerDown={onSheetHandlePointerDown}
+            onPointerMove={onSheetHandlePointerMove}
+            onPointerUp={onSheetHandlePointerUp}
+            onPointerCancel={onSheetHandlePointerUp}
+          >
+            <div className="w-9 h-1 rounded-full" style={{ backgroundColor: "var(--app-handlebar)" }} />
+          </div>
+
+          <div
+            className="min-h-0 flex-1 scroll-smooth overflow-x-hidden overflow-y-auto overscroll-y-contain px-5 pb-8"
+            style={{
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-y",
+              scrollBehavior: "smooth",
+            }}
+          >
 
         <h2 className="text-xl font-bold mb-5" style={{ color: "var(--app-text)" }}>
           {editing ? "Editar lançamento" : hideTypeAndPayment ? "Nova despesa" : "Novo lançamento"}
@@ -717,6 +801,8 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
             Excluir
           </button>
         ) : null}
+          </div>
+        </div>
       </div>
 
       {deleteScopeOpen && onDelete ? (
@@ -786,12 +872,12 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
               className="text-lg font-bold mb-2"
               style={{ color: "var(--app-text)" }}
             >
-              Data ou valor
+              Ocorrência ou série
             </h2>
             <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--app-muted)" }}>
-              Aplicar a alteração de data e/ou valor só a esta ocorrência, ou a esta e a todas as
-              seguintes? O nome do lançamento continua a ser o mesmo em toda a série. O horizonte
-              de 6 meses reutiliza a regra.
+              Aplicar a alteração de data, valor ou forma de pagamento só a esta ocorrência, ou a esta e
+              a todas as seguintes? O nome do lançamento continua a ser o mesmo em toda a série. O
+              horizonte de 6 meses reutiliza a regra.
             </p>
             <div className="flex flex-col gap-2">
               <button

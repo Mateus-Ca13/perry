@@ -87,7 +87,9 @@ export type SaveTransactionPayload = Omit<Transaction, "id"> & {
    * Com `previousDate` (data da ocorrência antes do salvar): aplica a alteração
    * de data e/ou valor só a esta linha, ou a esta e às futuras a partir de `previousDate`.
    * O nome (descrição) sincroniza sempre em toda a série, fora deste escopo.
+   * Com `previousAmount`, deteta alteração só de forma de pagamento (data e valor iguais).
    */
   dateChangeScope?: "single" | "allFuture";
   previousDate?: string;
+  previousAmount?: number;
 };
