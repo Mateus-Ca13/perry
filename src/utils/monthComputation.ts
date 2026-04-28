@@ -56,7 +56,8 @@ export function selectMonthTransactions(
  * Receitas manuais futuras: seguem a regra t.date <= hoje.
  * Aportes (invest.): entram sempre no mês — o saldo desconta o comprometido, mesmo
  * antes de “Aplicado”; a tela de Investimentos e totais “aplicados” usam só `paid` à parte.
- * Despesas: data ≤ hoje, ou futuro se já quitado; série materializada cai no ramo com recurrenceRuleId.
+ * Despesas (PIX etc.): data ≤ hoje, ou futuro se já quitado; no cartão, compras do mês entram sempre.
+ * Série materializada cai no ramo com recurrenceRuleId.
  */
 export function transactionCountsInSummary(t: Transaction, todayISO: string): boolean {
   if (t.recurrenceRuleId) {
@@ -64,6 +65,8 @@ export function transactionCountsInSummary(t: Transaction, todayISO: string): bo
   }
   if (t.type === "income") return t.date <= todayISO;
   if (t.type === "investment") return true;
+  /* Compra no cartão no mês já entra no resumo (como na fatura do cartão), mesmo com data > hoje. */
+  if (t.type === "expense" && t.paymentMethod === "card") return true;
   if (t.date <= todayISO) return true;
   return t.paid;
 }
@@ -94,12 +97,12 @@ export function groupByDate(
 
 /**
  * Despesa ainda “no futuro” em relação a hoje (sai do stream principal p/ seção de futuro).
- * Ocorrências de série materializadas não: ficam com as outras do mês, como receitas.
+ * Cartão não: alinha com a fatura. Série materializada não entra aqui.
  */
 export function isFutureExpense(t: Transaction, todayISO: string): boolean {
-  return (
-    t.type === "expense" && t.date > todayISO && !t.recurrenceRuleId
-  );
+  if (t.type !== "expense" || t.recurrenceRuleId) return false;
+  if (t.paymentMethod === "card") return false;
+  return t.date > todayISO;
 }
 
 export function partitionMonthForHome(
@@ -165,10 +168,11 @@ export function firstDayOfMonthISO(c: MonthCursor): string {
   return `${c.year}-${pad(c.month + 1)}-01`;
 }
 
-/** Itens que aparecem em listas cronológicas (exclui despesa/investimento futuros não quitados). */
+/** Itens que aparecem em listas cronológicas (despesa futura não quitada só fora do cartão). */
 export function isVisibleInTimeline(t: Transaction, todayISO: string): boolean {
   if (t.type === "income") return true;
   if (t.type === "expense" && t.recurrenceRuleId) return true;
+  if (t.type === "expense" && t.paymentMethod === "card") return true;
   if (t.date <= todayISO) return true;
   return t.paid;
 }
