@@ -1,5 +1,6 @@
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import type { CategoryDef } from "../types";
 import type { SortMode } from "../utils/transactionListFilters";
 
@@ -50,14 +51,7 @@ export function TransactionListToolbar({
     borderColor: "var(--app-border)",
   } as const;
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  useBodyScrollLock(open);
 
   return (
     <>

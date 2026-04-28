@@ -8,28 +8,53 @@ function DockNavLink({
   children,
   icon: Icon,
   end,
+  accentSolidWhenActive,
 }: {
   to: string;
   children: string;
   icon: typeof Receipt;
   end?: boolean;
+  /** Ativo: fundo accent + branco (como o +). Inativo: só texto em azul, sem fundo. */
+  accentSolidWhenActive?: boolean;
 }) {
   return (
     <NavLink
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex flex-col items-center justify-center gap-0.5 min-w-0 flex-1 basis-0 py-1.5 px-0.5 rounded-xl text-[10px] font-semibold leading-tight transition-colors ${
-          isActive ? "opacity-100" : "opacity-70 active:opacity-100"
+        `flex flex-col items-center justify-center gap-1 min-w-0 flex-1 basis-0 py-2 px-0.5 rounded-xl text-xs font-semibold leading-tight tracking-tight transition-[color,background-color,box-shadow,opacity] ${
+          isActive || accentSolidWhenActive ? "opacity-100" : "opacity-70 active:opacity-100"
         }`
       }
-      style={({ isActive }) => ({
-        color: isActive ? "var(--app-accent)" : "var(--app-muted)",
-        backgroundColor: isActive ? "var(--app-dock-active)" : "transparent",
-      })}
+      style={({ isActive }) => {
+        if (accentSolidWhenActive && isActive) {
+          return {
+            color: "#ffffff",
+            backgroundColor: "var(--app-accent)",
+            boxShadow: "0 4px 16px color-mix(in srgb, var(--app-accent) 45%, transparent)",
+          };
+        }
+        if (accentSolidWhenActive && !isActive) {
+          return {
+            color: "color-mix(in srgb, var(--app-accent) 72%, var(--app-text))",
+            backgroundColor: "transparent",
+          };
+        }
+        return {
+          color: isActive ? "var(--app-accent)" : "var(--app-muted)",
+          backgroundColor: isActive ? "var(--app-dock-active)" : "transparent",
+        };
+      }}
     >
-      <Icon className="w-5 h-5 shrink-0" strokeWidth={2} />
-      <span className="truncate w-full text-center">{children}</span>
+      {({ isActive }) => (
+        <>
+          <Icon
+            className="w-6 h-6 shrink-0"
+            strokeWidth={accentSolidWhenActive && isActive ? 2.5 : 2}
+          />
+          <span className="truncate w-full text-center">{children}</span>
+        </>
+      )}
     </NavLink>
   );
 }
@@ -75,7 +100,7 @@ export function FloatingDock({ onAddClick }: Props) {
         }}
       >
         <div
-          className="pointer-events-auto flex w-full max-w-lg mx-auto items-stretch rounded-2xl py-1.5 pl-1 pr-1 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.45)] border border-solid box-border overflow-hidden"
+          className="pointer-events-auto flex w-full max-w-lg mx-auto items-stretch gap-1.5 rounded-2xl py-1.5 px-1.5 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.45)] border border-solid box-border overflow-hidden"
           style={{
             backgroundColor: "var(--app-dock-bg)",
             borderColor: "var(--app-border)",
@@ -88,7 +113,7 @@ export function FloatingDock({ onAddClick }: Props) {
             Despesas
           </DockNavLink>
 
-          <DockNavLink to="/" icon={House} end>
+          <DockNavLink to="/" icon={House} end accentSolidWhenActive>
             Início
           </DockNavLink>
 
