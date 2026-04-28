@@ -60,6 +60,9 @@ export function normalizeTransaction(raw: unknown): Transaction | null {
     recurrenceRuleId,
   };
   if (type === "expense") {
+    if (cardId && !paymentMethod) {
+      paymentMethod = "card";
+    }
     if (paymentMethod) tx.paymentMethod = paymentMethod;
     if (cardId) tx.cardId = cardId;
   }

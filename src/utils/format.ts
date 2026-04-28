@@ -28,6 +28,14 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Valida YYYY-MM-DD e se o dia existe no calendário (evita gravar data vazia/inválida do input). */
+export function isValidIsoDateString(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
 /** Data de hoje no topo do app (sem rótulo “Hoje”/“Ontem”). */
 export function fmtHeaderToday(): string {
   return new Date().toLocaleDateString("pt-BR", {

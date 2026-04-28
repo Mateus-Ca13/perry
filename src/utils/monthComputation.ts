@@ -1,5 +1,12 @@
 import type { MonthCursor, MonthSummary, Transaction } from "../types";
 
+/** Despesa ligada a cartão: campo explícito ou legado só com `cardId`. */
+export function expenseUsesCard(t: Transaction): boolean {
+  if (t.type !== "expense") return false;
+  if (t.paymentMethod === "card") return true;
+  return typeof t.cardId === "string" && t.cardId.length > 0;
+}
+
 export function nowMonthCursor(): MonthCursor {
   const d = new Date();
   return { year: d.getFullYear(), month: d.getMonth() };
@@ -19,9 +26,8 @@ export function sumCardInvoiceInMonth(
   return transactions
     .filter(
       (t) =>
-        t.type === "expense" &&
+        expenseUsesCard(t) &&
         t.date.startsWith(ym) &&
-        t.paymentMethod === "card" &&
         t.cardId === cardId,
     )
     .reduce((s, t) => s + t.amount, 0);
@@ -56,7 +62,7 @@ export function selectMonthTransactions(
  * Receitas manuais futuras: seguem a regra t.date <= hoje.
  * Aportes (invest.): entram sempre no mês — o saldo desconta o comprometido, mesmo
  * antes de “Aplicado”; a tela de Investimentos e totais “aplicados” usam só `paid` à parte.
- * Despesas (PIX etc.): data ≤ hoje, ou futuro se já quitado; no cartão, compras do mês entram sempre.
+ * Despesas: qualquer lançamento já filtrado pelo mês visível entra no total (PIX/cartão, data futura ou não).
  * Série materializada cai no ramo com recurrenceRuleId.
  */
 export function transactionCountsInSummary(t: Transaction, todayISO: string): boolean {
@@ -65,10 +71,8 @@ export function transactionCountsInSummary(t: Transaction, todayISO: string): bo
   }
   if (t.type === "income") return t.date <= todayISO;
   if (t.type === "investment") return true;
-  /* Compra no cartão no mês já entra no resumo (como na fatura do cartão), mesmo com data > hoje. */
-  if (t.type === "expense" && t.paymentMethod === "card") return true;
-  if (t.date <= todayISO) return true;
-  return t.paid;
+  if (t.type === "expense") return true;
+  return false;
 }
 
 export function computeSummary(monthTransactions: Transaction[], todayISO: string): MonthSummary {
@@ -96,13 +100,10 @@ export function groupByDate(
 }
 
 /**
- * Despesa ainda “no futuro” em relação a hoje (sai do stream principal p/ seção de futuro).
- * Cartão não: alinha com a fatura. Série materializada não entra aqui.
+ * Mantido por compatibilidade: a home não separa mais despesas “futuras”; tudo vai ao fluxo principal.
  */
-export function isFutureExpense(t: Transaction, todayISO: string): boolean {
-  if (t.type !== "expense" || t.recurrenceRuleId) return false;
-  if (t.paymentMethod === "card") return false;
-  return t.date > todayISO;
+export function isFutureExpense(_t: Transaction, _todayISO: string): boolean {
+  return false;
 }
 
 export function partitionMonthForHome(
@@ -168,11 +169,10 @@ export function firstDayOfMonthISO(c: MonthCursor): string {
   return `${c.year}-${pad(c.month + 1)}-01`;
 }
 
-/** Itens que aparecem em listas cronológicas (despesa futura não quitada só fora do cartão). */
+/** Itens que aparecem em listas do mês: todas as despesas do mês; investimento futuro não quitado continua oculto. */
 export function isVisibleInTimeline(t: Transaction, todayISO: string): boolean {
   if (t.type === "income") return true;
-  if (t.type === "expense" && t.recurrenceRuleId) return true;
-  if (t.type === "expense" && t.paymentMethod === "card") return true;
+  if (t.type === "expense") return true;
   if (t.date <= todayISO) return true;
   return t.paid;
 }

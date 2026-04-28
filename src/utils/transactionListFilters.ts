@@ -1,4 +1,5 @@
 import type { Transaction } from "../types";
+import { expenseUsesCard } from "./monthComputation";
 
 export type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
 
@@ -71,7 +72,7 @@ export function groupTransactionsByDate(
 
 export function matchesCardFilter(tx: Transaction, cardId: string | null): boolean {
   if (!cardId) return true;
-  return tx.type === "expense" && tx.paymentMethod === "card" && tx.cardId === cardId;
+  return expenseUsesCard(tx) && tx.cardId === cardId;
 }
 
 export function applyListFilters(

@@ -410,6 +410,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       <FloatingDock onAddClick={openNew} />
       {showModal ? (
         <TransactionModal
+          key={editingTx?.id ?? "new"}
           editing={editingTx}
           expensePrefill={modalExpensePrefill}
           onSave={handleSave}

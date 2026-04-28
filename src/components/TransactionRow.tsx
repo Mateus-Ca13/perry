@@ -5,6 +5,7 @@ import { bankPresetById } from "../data/cardBanks";
 import { getCatInfo } from "../utils/categories";
 import { fmt, fmtListDay } from "../utils/format";
 import type { Transaction } from "../types";
+import { expenseUsesCard } from "../utils/monthComputation";
 
 type Props = {
   tx: Transaction;
@@ -30,7 +31,7 @@ export function TransactionRow({ tx, isLast, onTap, showDayOnMeta }: Props) {
 
   const subtitleExtra = useMemo(() => {
     if (tx.type !== "expense") return null;
-    if (tx.paymentMethod === "card" && tx.cardId) {
+    if (expenseUsesCard(tx) && tx.cardId) {
       const c = cards.find((x) => x.id === tx.cardId);
       const name = c ? c.label || bankPresetById(c.bankId)?.label : null;
       return name ? `Cartão · ${name}` : "Cartão";

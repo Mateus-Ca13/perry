@@ -5,7 +5,8 @@ import { bankPresetById } from "../data/cardBanks";
 import { useCards } from "../context/CardsContext";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import type { PaymentMethod, SaveTransactionPayload, Transaction, TxType } from "../types";
-import { todayISO } from "../utils/format";
+import { isValidIsoDateString, todayISO } from "../utils/format";
+import { expenseUsesCard } from "../utils/monthComputation";
 import { BankLogoMark } from "./BankLogoMark";
 import { CurrencyField } from "./CurrencyField";
 
@@ -82,7 +83,7 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
   useEffect(() => {
     if (editing) {
       if (editing.type === "expense") {
-        setPaymentMethod(editing.paymentMethod === "card" ? "card" : "pix");
+        setPaymentMethod(expenseUsesCard(editing) ? "card" : "pix");
         setSelectedCardId(editing.cardId ?? "");
       }
       return;
@@ -169,7 +170,7 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
   const paymentChangedFromEditing = useMemo(() => {
     if (!editing || editing.type !== "expense") return false;
     if (!("paymentMethod" in expensePayPart)) return false;
-    const curPm = editing.paymentMethod === "card" ? "card" : "pix";
+    const curPm = expenseUsesCard(editing) ? "card" : "pix";
     const curCid = editing.cardId ?? "";
     const nextPm = expensePayPart.paymentMethod === "card" ? "card" : "pix";
     const nextCid =
@@ -208,6 +209,7 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
     (scope: DeleteRecurrenceScope) => {
       if (!editing?.recurrenceRuleId) return;
       if (cardPayInvalid) return;
+      if (!isValidIsoDateString(date)) return;
       const val = parseFloat(String(amount).replace(",", "."));
       if (!description.trim() || Number.isNaN(val) || val <= 0) return;
       const amt = Math.round(val * 100) / 100;
@@ -235,6 +237,7 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
   const handleSave = useCallback(() => {
     const val = parseFloat(String(amount).replace(",", "."));
     if (!description.trim() || Number.isNaN(val) || val <= 0) return;
+    if (!isValidIsoDateString(date)) return;
     if (cardPayInvalid) return;
     const amt = Math.round(val * 100) / 100;
     if (editing) {
