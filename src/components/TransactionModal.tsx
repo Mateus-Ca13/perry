@@ -50,10 +50,16 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
   const cardPickerRef = useRef<HTMLDivElement>(null);
   const [sheetDragY, setSheetDragY] = useState(0);
   const [sheetDragging, setSheetDragging] = useState(false);
+  const [sheetEnterDone, setSheetEnterDone] = useState(false);
   const sheetDragActiveRef = useRef(false);
   const sheetDragStartY = useRef(0);
 
   useBodyScrollLock(true);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setSheetEnterDone(true), 450);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (editing) {
@@ -295,6 +301,16 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
     });
   }, [editing, type, description, amount, date, category, fixed, paid, onSave, expensePayPart, cardPayInvalid, paymentChangedFromEditing]);
 
+  const onSheetPanelAnimationEnd = useCallback(
+    (e: React.AnimationEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget) return;
+      if (e.animationName !== "slideUp") return;
+      if (closing) return;
+      setSheetEnterDone(true);
+    },
+    [closing],
+  );
+
   const onSheetHandlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (closing) return;
@@ -358,15 +374,21 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ touchAction: "none" }}>
-      <div
-        className="absolute inset-0 pointer-events-auto"
-        aria-hidden
+      <button
+        type="button"
+        tabIndex={-1}
+        className="absolute inset-0 cursor-pointer border-0 p-0"
+        aria-label="Fechar"
         style={{
           backgroundColor: "var(--app-modal-scrim)",
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
           animation: closing ? "fadeIn 0.25s ease reverse forwards" : "fadeIn 0.25s ease",
           touchAction: "none",
+          zIndex: 0,
+        }}
+        onClick={() => {
+          if (!closing) handleClose();
         }}
       />
 
@@ -376,20 +398,21 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
           backgroundColor: "var(--app-card)",
           maxHeight: "min(88vh, 640px)",
           touchAction: "none",
+          transform: `translateY(${sheetDragY}px)`,
+          transition: sheetDragging
+            ? "none"
+            : "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
           animation: closing
             ? "slideUp 0.25s cubic-bezier(0.4,0,1,1) reverse forwards"
-            : "slideUp 0.35s cubic-bezier(0.16,1,0.3,1)",
-        }}
-      >
-        <div
-          className="flex min-h-0 flex-1 flex-col"
-          style={{
-            transform: `translateY(${sheetDragY}px)`,
-            transition: sheetDragging
+            : sheetEnterDone
               ? "none"
-              : "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-          }}
-        >
+              : "slideUp 0.35s cubic-bezier(0.16,1,0.3,1) forwards",
+        }}
+        onAnimationEnd={onSheetPanelAnimationEnd}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
           <div
             className="flex shrink-0 cursor-grab touch-none select-none justify-center pt-3 pb-2 active:cursor-grabbing"
             style={{ touchAction: "none" }}
