@@ -7,11 +7,22 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { FloatingDock } from "../components/FloatingDock";
 import { TransactionModal } from "../components/TransactionModal";
-import type { PaymentMethod, RecurringRule, SaveTransactionPayload, Transaction } from "../types";
+import type {
+  CardDeclaredInvoiceEntry,
+  CardDeclaredInvoicesMap,
+  MonthCursor,
+  PaymentMethod,
+  RecurringRule,
+  SaveTransactionPayload,
+  Transaction,
+} from "../types";
+import { applyDeclaredInvoiceAdjustments } from "../utils/cardDeclaredInvoice";
 import { todayISO } from "../utils/format";
+import { monthCursorToYm } from "../utils/monthComputation";
 import {
   addCalendarMonths,
   buildMissingOccurrences,
@@ -21,19 +32,70 @@ import {
 } from "../utils/recurringMaterialize";
 import { uid } from "../utils/id";
 import {
+  loadCardDeclaredInvoices,
   loadPersistedAppState,
+  saveCardDeclaredInvoices,
   saveRecurringRules,
   saveTransactions,
 } from "../utils/storage";
 
 type ExpenseModalPrefill = { paymentMethod: PaymentMethod; cardId?: string };
 
+type TransactionsOutletUiValue = {
+  openNew: () => void;
+  showModal: boolean;
+  editingTx: Transaction | null;
+  modalExpensePrefill: ExpenseModalPrefill | null;
+  handleSave: (raw: SaveTransactionPayload) => void;
+  closeModal: () => void;
+  deleteTransaction: (id: string, scope?: "single" | "allFuture") => void;
+};
+
+const TransactionsOutletUiContext = createContext<TransactionsOutletUiValue | null>(null);
+
+/** Dock + modal de transação: tem de ficar dentro de `CardsProvider` (o modal usa `useCards`). */
+export function TransactionsOutlet() {
+  const ui = useContext(TransactionsOutletUiContext);
+  if (!ui) {
+    throw new Error("TransactionsOutlet must be used within TransactionsProvider");
+  }
+  return (
+    <>
+      <FloatingDock onAddClick={ui.openNew} />
+      {ui.showModal ? (
+        <TransactionModal
+          key={ui.editingTx?.id ?? "new"}
+          editing={ui.editingTx}
+          expensePrefill={ui.modalExpensePrefill}
+          onSave={ui.handleSave}
+          onDelete={
+            ui.editingTx
+              ? (scope) => {
+                  ui.deleteTransaction(ui.editingTx!.id, scope);
+                  ui.closeModal();
+                }
+              : null
+          }
+          onClose={ui.closeModal}
+        />
+      ) : null}
+    </>
+  );
+}
+
 type TransactionsContextValue = {
   transactions: Transaction[];
+  declaredCardInvoices: CardDeclaredInvoicesMap;
   openEdit: (tx: Transaction) => void;
   addTransaction: (tx: Omit<Transaction, "id">) => void;
   openNewExpenseWithPayment: (prefill: ExpenseModalPrefill) => void;
   stripCardFromTransactions: (cardId: string) => void;
+  setDeclaredCardInvoice: (
+    cardId: string,
+    month: MonthCursor,
+    entry: CardDeclaredInvoiceEntry | null,
+  ) => void;
+  clearDeclaredInvoicesForCard: (cardId: string) => void;
 };
 
 const TransactionsContext = createContext<TransactionsContextValue | null>(null);
@@ -46,16 +108,43 @@ export function useTransactions() {
   return ctx;
 }
 
-const initial = loadPersistedAppState();
+const persistedApp = loadPersistedAppState();
+const initialDeclaredInvoices = loadCardDeclaredInvoices();
+const initialTransactions = applyDeclaredInvoiceAdjustments(
+  persistedApp.transactions,
+  initialDeclaredInvoices,
+);
 
 export function TransactionsProvider({ children }: { children: ReactNode }) {
-  const [transactions, setTransactions] = useState<Transaction[]>(initial.transactions);
-  const [recurringRules, setRecurringRules] = useState<RecurringRule[]>(initial.rules);
+  const [transactions, setTransactionsInner] = useState<Transaction[]>(() => initialTransactions);
+  const [recurringRules, setRecurringRules] = useState<RecurringRule[]>(() => persistedApp.rules);
+  const [declaredCardInvoices, setDeclaredCardInvoices] = useState(() => initialDeclaredInvoices);
   const [showModal, setShowModal] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [modalExpensePrefill, setModalExpensePrefill] = useState<ExpenseModalPrefill | null>(null);
   const rulesRef = useRef(recurringRules);
   rulesRef.current = recurringRules;
+
+  const declaredCardInvoicesRef = useRef(declaredCardInvoices);
+  declaredCardInvoicesRef.current = declaredCardInvoices;
+
+  const setTransactions = useCallback((action: SetStateAction<Transaction[]>) => {
+    setTransactionsInner((prev) => {
+      const base = typeof action === "function" ? action(prev) : action;
+      return applyDeclaredInvoiceAdjustments(base, declaredCardInvoicesRef.current);
+    });
+  }, []);
+
+  useEffect(() => {
+    declaredCardInvoicesRef.current = declaredCardInvoices;
+    setTransactionsInner((prev) =>
+      applyDeclaredInvoiceAdjustments(prev, declaredCardInvoices),
+    );
+  }, [declaredCardInvoices]);
+
+  useEffect(() => {
+    saveCardDeclaredInvoices(declaredCardInvoices);
+  }, [declaredCardInvoices]);
 
   useEffect(() => {
     saveTransactions(transactions);
@@ -70,7 +159,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       const more = buildMissingOccurrences(recurringRules, txs, todayISO());
       return more.length ? [...txs, ...more] : txs;
     });
-  }, [recurringRules]);
+  }, [recurringRules, setTransactions]);
 
   useEffect(() => {
     const onVis = () => {
@@ -83,7 +172,35 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
+  }, [setTransactions]);
+
+  const clearDeclaredInvoicesForCard = useCallback((cardId: string) => {
+    setDeclaredCardInvoices((prev) => {
+      if (!prev[cardId]) return prev;
+      const next = { ...prev };
+      delete next[cardId];
+      return next;
+    });
   }, []);
+
+  const setDeclaredCardInvoice = useCallback(
+    (cardId: string, month: MonthCursor, entry: CardDeclaredInvoiceEntry | null) => {
+      const ym = monthCursorToYm(month);
+      setDeclaredCardInvoices((prev) => {
+        const next = { ...prev };
+        const cardMap = { ...(next[cardId] ?? {}) };
+        if (entry === null) {
+          delete cardMap[ym];
+        } else {
+          cardMap[ym] = entry;
+        }
+        if (Object.keys(cardMap).length === 0) delete next[cardId];
+        else next[cardId] = cardMap;
+        return next;
+      });
+    },
+    [],
+  );
 
   const openNew = useCallback(() => {
     setEditingTx(null);
@@ -97,13 +214,19 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
     setShowModal(true);
   }, []);
 
-  const stripCardFromTransactions = useCallback((cardId: string) => {
-    setTransactions((prev) =>
-      prev.map((t) =>
-        t.cardId === cardId ? { ...t, paymentMethod: "pix" as const, cardId: undefined } : t,
-      ),
-    );
-  }, []);
+  const stripCardFromTransactions = useCallback(
+    (cardId: string) => {
+      clearDeclaredInvoicesForCard(cardId);
+      setTransactions((prev) =>
+        prev
+          .filter((t) => !(t.cardInvoiceAdjustment && t.cardId === cardId))
+          .map((t) =>
+            t.cardId === cardId ? { ...t, paymentMethod: "pix" as const, cardId: undefined } : t,
+          ),
+      );
+    },
+    [clearDeclaredInvoicesForCard, setTransactions],
+  );
 
   const openEdit = useCallback((tx: Transaction) => {
     const canonical = transactions.find((t) => t.id === tx.id) ?? tx;
@@ -118,20 +241,37 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
     setModalExpensePrefill(null);
   }, []);
 
-  const addTransaction = useCallback((tx: Omit<Transaction, "id">) => {
-    setTransactions((prev) => [...prev, { ...tx, id: uid() }]);
-  }, []);
+  const addTransaction = useCallback(
+    (tx: Omit<Transaction, "id">) => {
+      setTransactions((prev) => [...prev, { ...tx, id: uid() }]);
+    },
+    [setTransactions],
+  );
 
-  const updateTransaction = useCallback((tx: Transaction) => {
-    const { _fromFixed: _, ...clean } = tx;
-    setTransactions((prev) => prev.map((t) => (t.id === clean.id ? clean : t)));
-  }, []);
+  const updateTransaction = useCallback(
+    (tx: Transaction) => {
+      const { _fromFixed: _, ...clean } = tx;
+      setTransactions((prev) =>
+        prev.map((t) => {
+          if (t.id !== clean.id) return t;
+          const merged: Transaction = { ...clean };
+          if (t.cardInvoiceAdjustment) merged.cardInvoiceAdjustment = true;
+          return merged;
+        }),
+      );
+    },
+    [setTransactions],
+  );
 
   const deleteTransaction = useCallback(
     (id: string, scope: "single" | "allFuture" = "single") => {
+      let clearDecl: { cardId: string; ym: string } | null = null;
       setTransactions((prev) => {
         const t = prev.find((x) => x.id === id);
         if (!t) return prev;
+        if (t.cardInvoiceAdjustment && t.cardId && scope === "single") {
+          clearDecl = { cardId: t.cardId, ym: t.date.slice(0, 7) };
+        }
         if (t.recurrenceRuleId) {
           const ruleId = t.recurrenceRuleId;
           const deletedYm = t.date.slice(0, 7);
@@ -139,9 +279,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
             const endAfter = addCalendarMonths(deletedYm, -1);
             setRecurringRules((rules) =>
               rules.map((r) =>
-                r.id === ruleId
-                  ? { ...r, active: false, endAfterMonth: endAfter }
-                  : r,
+                r.id === ruleId ? { ...r, active: false, endAfterMonth: endAfter } : r,
               ),
             );
             return prev.filter(
@@ -163,8 +301,19 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
         }
         return prev.filter((x) => x.id !== id);
       });
+      if (clearDecl) {
+        const { cardId, ym } = clearDecl;
+        setDeclaredCardInvoices((decl) => {
+          const next = { ...decl };
+          const cm = { ...(next[cardId] ?? {}) };
+          delete cm[ym];
+          if (Object.keys(cm).length === 0) delete next[cardId];
+          else next[cardId] = cm;
+          return next;
+        });
+      }
     },
-    [],
+    [setTransactions],
   );
 
   const handleSave = useCallback(
@@ -219,9 +368,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
           const lastYm = data.date.slice(0, 7);
           setRecurringRules((rules) =>
             rules.map((r) =>
-              r.id === ruleId
-                ? { ...r, active: false, endAfterMonth: lastYm }
-                : r,
+              r.id === ruleId ? { ...r, active: false, endAfterMonth: lastYm } : r,
             ),
           );
           setTransactions((prev) => {
@@ -258,16 +405,12 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
           const nextDesc = data.description.trim();
           setRecurringRules((rules) =>
             rules.map((r) =>
-              r.id === data.recurrenceRuleId
-                ? { ...r, description: nextDesc }
-                : r,
+              r.id === data.recurrenceRuleId ? { ...r, description: nextDesc } : r,
             ),
           );
           setTransactions((prev) =>
             prev.map((t) =>
-              t.recurrenceRuleId === data.recurrenceRuleId
-                ? { ...t, description: nextDesc }
-                : t,
+              t.recurrenceRuleId === data.recurrenceRuleId ? { ...t, description: nextDesc } : t,
             ),
           );
         }
@@ -390,41 +533,56 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       }
       closeModal();
     },
-    [addTransaction, updateTransaction, closeModal],
+    [addTransaction, updateTransaction, closeModal, setTransactions],
   );
 
   const value = useMemo(
     () => ({
       transactions,
+      declaredCardInvoices,
       openEdit,
       addTransaction,
       openNewExpenseWithPayment,
       stripCardFromTransactions,
+      setDeclaredCardInvoice,
+      clearDeclaredInvoicesForCard,
     }),
-    [transactions, openEdit, addTransaction, openNewExpenseWithPayment, stripCardFromTransactions],
+    [
+      transactions,
+      declaredCardInvoices,
+      openEdit,
+      addTransaction,
+      openNewExpenseWithPayment,
+      stripCardFromTransactions,
+      setDeclaredCardInvoice,
+      clearDeclaredInvoicesForCard,
+    ],
+  );
+
+  const outletUi = useMemo(
+    (): TransactionsOutletUiValue => ({
+      openNew,
+      showModal,
+      editingTx,
+      modalExpensePrefill,
+      handleSave,
+      closeModal,
+      deleteTransaction,
+    }),
+    [
+      openNew,
+      showModal,
+      editingTx,
+      modalExpensePrefill,
+      handleSave,
+      closeModal,
+      deleteTransaction,
+    ],
   );
 
   return (
-    <TransactionsContext.Provider value={value}>
-      {children}
-      <FloatingDock onAddClick={openNew} />
-      {showModal ? (
-        <TransactionModal
-          key={editingTx?.id ?? "new"}
-          editing={editingTx}
-          expensePrefill={modalExpensePrefill}
-          onSave={handleSave}
-          onDelete={
-            editingTx
-              ? (scope) => {
-                  deleteTransaction(editingTx.id, scope);
-                  closeModal();
-                }
-              : null
-          }
-          onClose={closeModal}
-        />
-      ) : null}
-    </TransactionsContext.Provider>
+    <TransactionsOutletUiContext.Provider value={outletUi}>
+      <TransactionsContext.Provider value={value}>{children}</TransactionsContext.Provider>
+    </TransactionsOutletUiContext.Provider>
   );
 }

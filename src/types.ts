@@ -16,6 +16,15 @@ export interface PaymentCard {
   label: string;
 }
 
+/** Valor total da fatura declarado pelo utilizador para um cartão num mês (YYYY-MM). */
+export interface CardDeclaredInvoiceEntry {
+  total: number;
+  /** Texto usado na despesa automática (“Demais gastos — …”). */
+  cardLabelForDescription: string;
+}
+
+export type CardDeclaredInvoicesMap = Record<string, Record<string, CardDeclaredInvoiceEntry>>;
+
 /** Série recorrente (janela materializada; não se usa mais `fixed` para projeção). */
 export interface RecurringRule {
   id: string;
@@ -58,6 +67,8 @@ export interface Transaction {
   paymentMethod?: PaymentMethod;
   /** Despesa em cartão: `paymentMethod === "card"`. */
   cardId?: string;
+  /** Despesa criada/atualizada pelo app para fechar o valor declarado da fatura do cartão neste mês. */
+  cardInvoiceAdjustment?: boolean;
 }
 
 export interface MonthCursor {

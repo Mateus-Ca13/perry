@@ -1,4 +1,5 @@
 import {
+  CARD_DECLARED_INVOICES_KEY,
   CLOSED_MONTHS_KEY,
   PAYMENT_CARDS_KEY,
   RECURRING_MIGRATION_V1_KEY,
@@ -7,6 +8,8 @@ import {
 } from "../constants";
 import type {
   CardBankId,
+  CardDeclaredInvoiceEntry,
+  CardDeclaredInvoicesMap,
   PaymentCard,
   PaymentMethod,
   RecurringRule,
@@ -65,8 +68,52 @@ export function normalizeTransaction(raw: unknown): Transaction | null {
     }
     if (paymentMethod) tx.paymentMethod = paymentMethod;
     if (cardId) tx.cardId = cardId;
+    if (o.cardInvoiceAdjustment === true) tx.cardInvoiceAdjustment = true;
   }
   return tx;
+}
+
+const YM_RE_STORAGE = /^\d{4}-\d{2}$/;
+
+export function normalizeCardDeclaredInvoices(raw: unknown): CardDeclaredInvoicesMap {
+  if (!raw || typeof raw !== "object") return {};
+  const out: CardDeclaredInvoicesMap = {};
+  for (const [cardId, innerRaw] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof cardId !== "string" || cardId === "" || !innerRaw || typeof innerRaw !== "object") continue;
+    const inner: Record<string, CardDeclaredInvoiceEntry> = {};
+    for (const [ym, entryRaw] of Object.entries(innerRaw as Record<string, unknown>)) {
+      if (!YM_RE_STORAGE.test(ym) || !entryRaw || typeof entryRaw !== "object") continue;
+      const er = entryRaw as Record<string, unknown>;
+      const total = typeof er.total === "number" && Number.isFinite(er.total) ? er.total : NaN;
+      const cardLabelForDescription =
+        typeof er.cardLabelForDescription === "string" ? er.cardLabelForDescription.trim() : "";
+      if (!Number.isFinite(total) || total < 0 || !cardLabelForDescription) continue;
+      inner[ym] = { total, cardLabelForDescription };
+    }
+    if (Object.keys(inner).length > 0) out[cardId] = inner;
+  }
+  return out;
+}
+
+export function loadCardDeclaredInvoices(): CardDeclaredInvoicesMap {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(CARD_DECLARED_INVOICES_KEY);
+    if (raw == null || raw === "") return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return normalizeCardDeclaredInvoices(parsed);
+  } catch {
+    return {};
+  }
+}
+
+export function saveCardDeclaredInvoices(map: CardDeclaredInvoicesMap): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(CARD_DECLARED_INVOICES_KEY, JSON.stringify(map));
+  } catch {
+    /* quota */
+  }
 }
 
 export function loadTransactions(): Transaction[] {
@@ -164,6 +211,7 @@ export function clearAllAppDataStorage(): void {
     localStorage.removeItem(RECURRING_MIGRATION_V1_KEY);
     localStorage.removeItem(CLOSED_MONTHS_KEY);
     localStorage.removeItem(PAYMENT_CARDS_KEY);
+    localStorage.removeItem(CARD_DECLARED_INVOICES_KEY);
   } catch {
     /* privado, quota, etc. */
   }

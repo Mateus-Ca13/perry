@@ -16,7 +16,7 @@ export function monthCursorToYm(c: MonthCursor): string {
   return `${c.year}-${String(c.month + 1).padStart(2, "0")}`;
 }
 
-/** Soma das despesas do mês lançadas neste cartão (fatura do mês visto). */
+/** Soma das despesas do mês lançadas neste cartão (fatura do mês visto), inclui linha de ajuste da fatura se existir. */
 export function sumCardInvoiceInMonth(
   transactions: Transaction[],
   cardId: string,
@@ -27,6 +27,24 @@ export function sumCardInvoiceInMonth(
     .filter(
       (t) =>
         expenseUsesCard(t) &&
+        t.date.startsWith(ym) &&
+        t.cardId === cardId,
+    )
+    .reduce((s, t) => s + t.amount, 0);
+}
+
+/** Igual a `sumCardInvoiceInMonth` mas sem a despesa automática de fecho da fatura declarada. */
+export function sumCardInvoiceItemizedInMonth(
+  transactions: Transaction[],
+  cardId: string,
+  month: MonthCursor,
+): number {
+  const ym = monthCursorToYm(month);
+  return transactions
+    .filter(
+      (t) =>
+        expenseUsesCard(t) &&
+        !t.cardInvoiceAdjustment &&
         t.date.startsWith(ym) &&
         t.cardId === cardId,
     )

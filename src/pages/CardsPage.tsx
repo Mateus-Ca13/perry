@@ -2,14 +2,12 @@ import { useCallback, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { SubPageLayout } from "../components/SubPageLayout";
 import { useCards } from "../context/CardsContext";
-import { useTransactions } from "../context/TransactionsContext";
 import type { CardBankId } from "../types";
 import { bankPresetById, CARD_BANK_PRESETS } from "../data/cardBanks";
 import { BankLogoMark } from "../components/BankLogoMark";
 
 export function CardsPage() {
   const { cards, addCard, removeCard } = useCards();
-  const { stripCardFromTransactions } = useTransactions();
   const [bankId, setBankId] = useState<CardBankId>("nubank");
   const [label, setLabel] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -21,11 +19,10 @@ export function CardsPage() {
 
   const confirmRemove = useCallback(
     (id: string) => {
-      stripCardFromTransactions(id);
       removeCard(id);
       setRemovingId(null);
     },
-    [removeCard, stripCardFromTransactions],
+    [removeCard],
   );
 
   return (

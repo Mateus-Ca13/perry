@@ -25,7 +25,8 @@ import { isMonthBeyondRecurringWindow } from "../utils/recurringMaterialize";
 import { CalendarCheck } from "lucide-react";
 
 export function HomePage() {
-  const { transactions, openEdit, addTransaction, openNewExpenseWithPayment } = useTransactions();
+  const { transactions, openEdit, addTransaction, openNewExpenseWithPayment, declaredCardInvoices, setDeclaredCardInvoice } =
+    useTransactions();
   const { cards } = useCards();
   const [currentMonth, setCurrentMonth] = useState<MonthCursor>(nowMonthCursor);
   const [showCloseMonth, setShowCloseMonth] = useState(false);
@@ -146,8 +147,12 @@ export function HomePage() {
             cards={cards}
             transactions={transactions}
             currentMonth={currentMonth}
+            declaredCardInvoices={declaredCardInvoices}
             onAddExpenseForCard={(cardId) =>
               openNewExpenseWithPayment({ paymentMethod: "card", cardId })
+            }
+            onSaveDeclaredCardInvoice={(cardId, month, entry) =>
+              setDeclaredCardInvoice(cardId, month, entry)
             }
           />
 

@@ -3,7 +3,7 @@ import { AppContentShell } from "./components/AppContentShell";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { ThemeProvider } from "./context/ThemeContext";
 import { CardsProvider } from "./context/CardsContext";
-import { TransactionsProvider } from "./context/TransactionsContext";
+import { TransactionsProvider, TransactionsOutlet } from "./context/TransactionsContext";
 import { FilteredTransactionsPage } from "./pages/FilteredTransactionsPage";
 import { HomePage } from "./pages/HomePage";
 import { InvestmentsPage } from "./pages/InvestmentsPage";
@@ -15,8 +15,9 @@ export default function App() {
     <ThemeProvider>
       <BrowserRouter>
         <ScrollToTop />
-        <CardsProvider>
-          <TransactionsProvider>
+        <TransactionsProvider>
+          <CardsProvider>
+            <TransactionsOutlet />
             <AppContentShell>
               <Routes>
                 <Route path="/" element={<HomePage />} />
@@ -28,8 +29,8 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AppContentShell>
-          </TransactionsProvider>
-        </CardsProvider>
+          </CardsProvider>
+        </TransactionsProvider>
       </BrowserRouter>
     </ThemeProvider>
   );

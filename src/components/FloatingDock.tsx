@@ -78,7 +78,7 @@ export function FloatingDock({ onAddClick }: Props) {
           <button
             type="button"
             onClick={onAddClick}
-            className="w-14 h-14 rounded-full flex items-center justify-center pointer-events-auto active:scale-90 shrink-0"
+            className="w-14 h-14 rounded-full flex mb-2 items-center justify-center pointer-events-auto active:scale-90 shrink-0"
             style={{
               backgroundColor: "var(--app-accent)",
               boxShadow: "0 4px 16px color-mix(in srgb, var(--app-accent) 45%, transparent)",

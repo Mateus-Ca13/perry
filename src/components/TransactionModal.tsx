@@ -372,6 +372,9 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
   const readOnlyCategory = editing ? categoryRowCats.find((c) => c.id === editing.category) : null;
   const ReadOnlyIcon = readOnlyCategory?.Icon;
 
+  const isCardInvoiceAdjustment =
+    !!(editing?.type === "expense" && editing.cardInvoiceAdjustment);
+
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ touchAction: "none" }}>
       <button
@@ -434,8 +437,23 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
           >
 
         <h2 className="text-xl font-bold mb-5" style={{ color: "var(--app-text)" }}>
-          {editing ? "Editar lançamento" : hideTypeAndPayment ? "Nova despesa" : "Novo lançamento"}
+          {editing
+            ? isCardInvoiceAdjustment
+              ? "Ajuste da fatura no cartão"
+              : "Editar lançamento"
+            : hideTypeAndPayment
+              ? "Nova despesa"
+              : "Novo lançamento"}
         </h2>
+
+        {isCardInvoiceAdjustment ? (
+          <div
+            className="mb-5 rounded-xl p-3 text-sm leading-relaxed"
+            style={{ backgroundColor: "var(--app-input-bg)", color: "var(--app-muted)" }}
+          >
+            O valor é calculado automaticamente com base no total da fatura que indicou ao tocar no cartão na página inicial e nas demais despesas deste cartão no mês. Para alterar o total, use outra vez essa opção no cartão; para remover o vínculo, exclua este lançamento.
+          </div>
+        ) : null}
 
         {editing ? null : hideTypeAndPayment ? null : (
           <div
@@ -480,11 +498,14 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={descriptionPlaceholder}
+            disabled={isCardInvoiceAdjustment}
+            readOnly={isCardInvoiceAdjustment}
             className="w-full px-4 py-3 rounded-xl text-base outline-none"
             style={{
               backgroundColor: "var(--app-input-bg)",
               color: "var(--app-text)",
               border: "none",
+              opacity: isCardInvoiceAdjustment ? 0.85 : 1,
             }}
           />
         </label>
@@ -496,10 +517,15 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
           >
             Valor
           </span>
-          <CurrencyField value={amount} onChange={setAmount} placeholder="0,00" />
+          <CurrencyField
+            value={amount}
+            onChange={setAmount}
+            placeholder="0,00"
+            disabled={isCardInvoiceAdjustment}
+          />
         </label>
 
-        {effectiveType === "expense" && !hideTypeAndPayment ? (
+        {effectiveType === "expense" && !hideTypeAndPayment && !isCardInvoiceAdjustment ? (
           <div className="mb-4">
             <span
               className="text-xs font-semibold uppercase tracking-wider mb-2 block"
@@ -666,6 +692,7 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              disabled={isCardInvoiceAdjustment}
               className="box-border block w-full min-w-0 max-w-full px-4 py-3 rounded-xl text-base outline-none"
               style={{
                 color: "var(--app-text)",
@@ -674,6 +701,7 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
                 minWidth: 0,
                 maxWidth: "100%",
                 width: "100%",
+                opacity: isCardInvoiceAdjustment ? 0.85 : 1,
               }}
             />
           </div>
@@ -736,7 +764,8 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
           )}
         </div>
 
-        {effectiveType === "expense" || effectiveType === "investment" ? (
+        {(effectiveType === "expense" || effectiveType === "investment") &&
+        !(effectiveType === "expense" && isCardInvoiceAdjustment) ? (
           <div className="flex items-center justify-between mb-4 px-1">
             <div>
               <p className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>
@@ -769,49 +798,66 @@ export function TransactionModal({ editing, expensePrefill = null, onSave, onDel
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between mb-6 px-1">
-          <div>
-            <p className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>
-              Lançamento fixo
-            </p>
-            <p className="text-xs" style={{ color: "var(--app-muted)" }}>
-              {editing?.recurrenceRuleId
-                ? "Desligar encerra a série: este mês fica como último, os seguintes somem; nada de novo é gerado."
-                : "Repete automaticamente todo mês"}
-            </p>
+        {!isCardInvoiceAdjustment ? (
+          <div className="flex items-center justify-between mb-6 px-1">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>
+                Lançamento fixo
+              </p>
+              <p className="text-xs" style={{ color: "var(--app-muted)" }}>
+                {editing?.recurrenceRuleId
+                  ? "Desligar encerra a série: este mês fica como último, os seguintes somem; nada de novo é gerado."
+                  : "Repete automaticamente todo mês"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFixed((f) => !f)}
+              className="relative w-12 h-7 rounded-full shrink-0"
+              style={{
+                backgroundColor: fixed ? "#34C759" : "var(--app-toggle-off)",
+                transition: "background-color 0.25s ease",
+              }}
+            >
+              <div
+                className="absolute top-0.5 w-6 h-6 rounded-full bg-white"
+                style={{
+                  left: fixed ? 22 : 2,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                  transition: "left 0.25s cubic-bezier(0.16,1,0.3,1)",
+                }}
+              />
+            </button>
           </div>
+        ) : null}
+
+        {isCardInvoiceAdjustment ? (
           <button
             type="button"
-            onClick={() => setFixed((f) => !f)}
-            className="relative w-12 h-7 rounded-full shrink-0"
+            onClick={handleClose}
+            className="w-full py-3.5 rounded-2xl text-base font-semibold active:scale-[0.98]"
             style={{
-              backgroundColor: fixed ? "#34C759" : "var(--app-toggle-off)",
-              transition: "background-color 0.25s ease",
+              backgroundColor: "var(--app-input-bg)",
+              color: "var(--app-text)",
+              transition: "transform 0.15s cubic-bezier(0.4,0,0.2,1)",
             }}
           >
-            <div
-              className="absolute top-0.5 w-6 h-6 rounded-full bg-white"
-              style={{
-                left: fixed ? 22 : 2,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-                transition: "left 0.25s cubic-bezier(0.16,1,0.3,1)",
-              }}
-            />
+            Fechar
           </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={cardPayInvalid}
-          className="w-full py-3.5 rounded-2xl text-base font-semibold text-white active:scale-[0.98] disabled:opacity-40"
-          style={{
-            backgroundColor: "var(--app-accent)",
-            transition: "transform 0.15s cubic-bezier(0.4,0,0.2,1)",
-          }}
-        >
-          {editing ? "Salvar alterações" : "Adicionar"}
-        </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={cardPayInvalid}
+            className="w-full py-3.5 rounded-2xl text-base font-semibold text-white active:scale-[0.98] disabled:opacity-40"
+            style={{
+              backgroundColor: "var(--app-accent)",
+              transition: "transform 0.15s cubic-bezier(0.4,0,0.2,1)",
+            }}
+          >
+            {editing ? "Salvar alterações" : "Adicionar"}
+          </button>
+        )}
 
         {editing && onDelete ? (
           <button

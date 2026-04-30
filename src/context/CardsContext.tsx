@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { CardBankId, PaymentCard } from "../types";
+import { useTransactions } from "./TransactionsContext";
 import { uid } from "../utils/id";
 import { loadPaymentCards, savePaymentCards } from "../utils/storage";
 
@@ -28,6 +29,7 @@ export function useCards() {
 }
 
 export function CardsProvider({ children }: { children: ReactNode }) {
+  const { stripCardFromTransactions } = useTransactions();
   const [cards, setCards] = useState<PaymentCard[]>(() => loadPaymentCards());
 
   useEffect(() => {
@@ -38,9 +40,13 @@ export function CardsProvider({ children }: { children: ReactNode }) {
     setCards((c) => [...c, { id: uid(), bankId, label: label.trim() }]);
   }, []);
 
-  const removeCard = useCallback((id: string) => {
-    setCards((c) => c.filter((x) => x.id !== id));
-  }, []);
+  const removeCard = useCallback(
+    (id: string) => {
+      stripCardFromTransactions(id);
+      setCards((c) => c.filter((x) => x.id !== id));
+    },
+    [stripCardFromTransactions],
+  );
 
   const value = useMemo(
     () => ({

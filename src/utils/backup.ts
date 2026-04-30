@@ -1,19 +1,22 @@
 import { RECURRING_MIGRATION_V1_KEY } from "../constants";
-import type { PaymentCard, RecurringRule, Transaction } from "../types";
+import type { CardDeclaredInvoicesMap, PaymentCard, RecurringRule, Transaction } from "../types";
 import { normalizeRecurringRule } from "./recurringMaterialize";
 import {
+  loadCardDeclaredInvoices,
   loadClosedMonths,
   loadPaymentCards,
   loadRecurringRules,
   loadTransactions,
+  normalizeCardDeclaredInvoices,
   normalizeTransaction,
+  saveCardDeclaredInvoices,
   saveClosedMonthsList,
   savePaymentCards,
   saveRecurringRules,
   saveTransactions,
 } from "./storage";
 
-export const PERRY_BACKUP_VERSION = 1;
+export const PERRY_BACKUP_VERSION = 2;
 
 const YM_RE = /^\d{4}-\d{2}$/;
 
@@ -24,6 +27,8 @@ export type PerryBackupFile = {
   recurringRules: RecurringRule[];
   closedMonths: string[];
   paymentCards: PaymentCard[];
+  /** Desde v2: totais de fatura declarados por cartão/mês. */
+  cardDeclaredInvoices?: CardDeclaredInvoicesMap;
 };
 
 export function buildPerryBackupObject(): PerryBackupFile {
@@ -34,6 +39,7 @@ export function buildPerryBackupObject(): PerryBackupFile {
     recurringRules: loadRecurringRules(),
     closedMonths: loadClosedMonths(),
     paymentCards: loadPaymentCards(),
+    cardDeclaredInvoices: loadCardDeclaredInvoices(),
   };
 }
 
@@ -67,7 +73,8 @@ export function importPerryBackupFromObject(
   }
   const o = raw as Record<string, unknown>;
   const ver = o.perryExportVersion;
-  if (ver != null && Number(ver) !== PERRY_BACKUP_VERSION) {
+  const verNum = ver == null ? 1 : Number(ver);
+  if (![1, 2].includes(verNum)) {
     return { ok: false, error: "Versão de backup não suportada." };
   }
 
@@ -126,11 +133,17 @@ export function importPerryBackupFromObject(
     }
   }
 
+  let cardDeclaredInvoices: CardDeclaredInvoicesMap =
+    verNum >= 2 && o.cardDeclaredInvoices !== undefined
+      ? normalizeCardDeclaredInvoices(o.cardDeclaredInvoices)
+      : {};
+
   try {
     saveTransactions(transactions);
     saveRecurringRules(recurringRules);
     saveClosedMonthsList(closedMonths);
     savePaymentCards(paymentCards);
+    saveCardDeclaredInvoices(cardDeclaredInvoices);
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(RECURRING_MIGRATION_V1_KEY, "1");
     }

@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Plus } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { CardBankId, MonthCursor, PaymentCard, Transaction } from "../types";
+import type {
+  CardBankId,
+  CardDeclaredInvoiceEntry,
+  CardDeclaredInvoicesMap,
+  MonthCursor,
+  PaymentCard,
+  Transaction,
+} from "../types";
 import { bankPresetById } from "../data/cardBanks";
-import { sumCardInvoiceInMonth } from "../utils/monthComputation";
+import {
+  monthCursorToYm,
+  sumCardInvoiceInMonth,
+  sumCardInvoiceItemizedInMonth,
+} from "../utils/monthComputation";
 import { fmt } from "../utils/format";
 import { BankLogoMark } from "./BankLogoMark";
 import { CardQuickActionDialog } from "./CardQuickActionDialog";
@@ -139,29 +150,42 @@ type Props = {
   cards: PaymentCard[];
   transactions: Transaction[];
   currentMonth: MonthCursor;
+  declaredCardInvoices: CardDeclaredInvoicesMap;
   onAddExpenseForCard: (cardId: string) => void;
+  onSaveDeclaredCardInvoice: (
+    cardId: string,
+    month: MonthCursor,
+    entry: CardDeclaredInvoiceEntry | null,
+  ) => void;
 };
 
 export function HomeCardsCarousel({
   cards,
   transactions,
   currentMonth,
+  declaredCardInvoices,
   onAddExpenseForCard,
+  onSaveDeclaredCardInvoice,
 }: Props) {
   const [activeCard, setActiveCard] = useState<PaymentCard | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
 
-  const items = useMemo(
-    () =>
-      cards.map((c) => {
-        const preset = bankPresetById(c.bankId);
-        const displayName = c.label || preset?.label || c.bankId;
-        const invoice = sumCardInvoiceInMonth(transactions, c.id, currentMonth);
-        return { card: c, displayName, invoice, preset };
-      }),
-    [cards, transactions, currentMonth],
-  );
+  const items = useMemo(() => {
+    const ym = monthCursorToYm(currentMonth);
+    return cards.map((c) => {
+      const preset = bankPresetById(c.bankId);
+      const displayName = c.label || preset?.label || c.bankId;
+        const declaredEntry = declaredCardInvoices[c.id]?.[ym];
+        const invoiceComputed = sumCardInvoiceInMonth(transactions, c.id, currentMonth);
+        const itemizedSum = sumCardInvoiceItemizedInMonth(transactions, c.id, currentMonth);
+        const invoice =
+          declaredEntry != null
+            ? Math.max(declaredEntry.total, invoiceComputed)
+            : invoiceComputed;
+      return { card: c, displayName, invoice, invoiceComputed, itemizedSum, declaredEntry };
+    });
+  }, [cards, transactions, currentMonth, declaredCardInvoices]);
 
   const carouselSlideCount = cards.length > 0 ? items.length + 1 : 0;
 
@@ -313,18 +337,26 @@ export function HomeCardsCarousel({
 
       {activeCard ? (
         (() => {
+          const ym = monthCursorToYm(currentMonth);
           const preset = bankPresetById(activeCard.bankId);
           const displayName = activeCard.label || preset?.label || activeCard.bankId;
-          const invoice = sumCardInvoiceInMonth(transactions, activeCard.id, currentMonth);
+          const declaredEntry = declaredCardInvoices[activeCard.id]?.[ym];
+          const invoiceComputed = sumCardInvoiceInMonth(transactions, activeCard.id, currentMonth);
+          const itemizedSum = sumCardInvoiceItemizedInMonth(transactions, activeCard.id, currentMonth);
           return (
             <CardQuickActionDialog
               card={activeCard}
               displayName={displayName}
-              invoiceTotal={invoice}
+              invoiceTotal={invoiceComputed}
+              itemizedSum={itemizedSum}
+              declaredEntry={declaredEntry}
               currentMonth={currentMonth}
               bankId={activeCard.bankId}
               onClose={() => setActiveCard(null)}
               onAddExpense={() => onAddExpenseForCard(activeCard.id)}
+              onSaveDeclaredInvoice={(entry) =>
+                onSaveDeclaredCardInvoice(activeCard.id, currentMonth, entry)
+              }
             />
           );
         })()
