@@ -12,8 +12,9 @@ function monthCursorFromYm(ym: string): MonthCursor {
 }
 
 /**
- * Garante uma despesa `cardInvoiceAdjustment` por (cartão, mês) quando há total declarado:
- * valor = declarado − soma das demais despesas no cartão naquele mês (mínimo 0).
+ * Garante uma despesa `cardInvoiceAdjustment` por (cartão, mês) quando o fechamento declarado
+ * é maior que a soma dos lançamentos sem ajuste: valor = declarado − essa soma (mínimo 0).
+ * Se o declarado for menor, não cria linha (a diferença é só “gastos previstos” na UI).
  */
 export function applyDeclaredInvoiceAdjustments(
   transactions: Transaction[],

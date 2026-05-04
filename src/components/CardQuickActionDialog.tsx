@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import type { CardDeclaredInvoiceEntry, CardBankId, MonthCursor, PaymentCard } from "../types";
 import { fmt } from "../utils/format";
-import { monthCursorToYm } from "../utils/monthComputation";
+import { cardInvoiceHomeDisplay, monthCursorToYm } from "../utils/monthComputation";
 import { BankLogoMark } from "./BankLogoMark";
 import { CurrencyField } from "./CurrencyField";
 
@@ -54,10 +54,21 @@ export function CardQuickActionDialog({
     return Math.round(n * 100) / 100;
   }, [invoiceInput]);
 
-  const declaredBelowItemized =
-    liveParsedDeclared !== null &&
-    liveParsedDeclared > 0 &&
-    Math.round(liveParsedDeclared * 100) < Math.round(itemizedSum * 100);
+  const effectiveDeclaredTotal = useMemo((): number | null => {
+    if (liveParsedDeclared !== null) return liveParsedDeclared;
+    if (declaredEntry != null) return declaredEntry.total;
+    return null;
+  }, [liveParsedDeclared, declaredEntry]);
+
+  const { gastosPrevistos: previewGastosPrevistos } = useMemo(
+    () =>
+      cardInvoiceHomeDisplay({
+        declaredTotal: effectiveDeclaredTotal,
+        itemizedSum,
+        invoiceComputed: invoiceTotal,
+      }),
+    [effectiveDeclaredTotal, itemizedSum, invoiceTotal],
+  );
 
   useEffect(() => {
     if (!invoiceHelpOpen) return;
@@ -151,25 +162,34 @@ export function CardQuickActionDialog({
               {displayName}
             </h2>
             <p className="text-xs mt-0.5 leading-snug" style={{ color: "var(--app-muted)" }}>
-              Fatura neste mês ({ym}):{" "}
+              Total no cartão neste mês ({ym}):{" "}
               <span className="font-semibold" style={{ color: "var(--app-text)" }}>
                 {fmt(invoiceTotal)}
               </span>
-              {declaredEntry != null ? (
+              {effectiveDeclaredTotal !== null ? (
                 <>
                   {" "}
-                  · declarado{" "}
+                  · fechamento no banco{" "}
                   <span className="font-semibold" style={{ color: "var(--app-text)" }}>
-                    {fmt(declaredEntry.total)}
+                    {fmt(effectiveDeclaredTotal)}
                   </span>
                 </>
               ) : null}
             </p>
             <p className="text-[11px] mt-1 leading-snug" style={{ color: "var(--app-muted)" }}>
-              Soma das despesas lançadas (sem o ajuste):{" "}
+              Lançamentos (sem linha de ajuste):{" "}
               <span className="font-medium" style={{ color: "var(--app-text)" }}>
                 {fmt(itemizedSum)}
               </span>
+              {previewGastosPrevistos != null ? (
+                <>
+                  {" "}
+                  · gastos previstos{" "}
+                  <span className="font-medium" style={{ color: "var(--app-text)" }}>
+                    {fmt(previewGastosPrevistos)}
+                  </span>
+                </>
+              ) : null}
             </p>
           </div>
         </div>
@@ -209,9 +229,10 @@ export function CardQuickActionDialog({
                 boxShadow: "var(--app-card-shadow)",
               }}
             >
-              O app cria ou atualiza uma despesa única “Demais gastos — {displayName}” com a diferença até esse total.
-              Ao alterar o valor ou as outras despesas no cartão, essa linha acompanha automaticamente.
-              Deixe o campo vazio e toque em «Aplicar fatura» para limpar o total declarado neste mês.
+              Se o fechamento for maior que os lançamentos sem ajuste, o app cria ou atualiza a despesa “Demais gastos — {displayName}” até esse total.
+              Se for menor, não há linha extra: a diferença aparece como “gastos previstos” no cartão da página inicial (lançamentos além do que já fechou no banco).
+              Ao alterar o valor ou as despesas no cartão, o ajuste e os previstos atualizam automaticamente.
+              Deixe o campo vazio e toque em «Aplicar fatura» para limpar o fechamento neste mês.
             </div>
           ) : null}
           <CurrencyField
@@ -220,21 +241,27 @@ export function CardQuickActionDialog({
             onChange={setInvoiceInput}
             placeholder="0,00"
           />
-          {declaredBelowItemized ? (
+          {previewGastosPrevistos != null && effectiveDeclaredTotal !== null ? (
             <div
-              role="alert"
               className="mt-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed"
               style={{
-                backgroundColor: "rgba(255, 149, 0, 0.14)",
-                color: "var(--app-text)",
-                border: "1px solid rgba(255, 149, 0, 0.35)",
+                backgroundColor: "var(--app-card)",
+                color: "var(--app-muted)",
+                border: "1px solid var(--app-border)",
               }}
             >
-              <span className="font-semibold">Inconsistência:</span> já há{" "}
-              <span className="tabular-nums font-semibold">{fmt(itemizedSum)}</span> em despesas neste cartão neste
-              mês; o total da fatura{" "}
-              <span className="tabular-nums font-semibold">{fmt(liveParsedDeclared)}</span> fica abaixo dessa soma.
-              Confirme o valor ou as despesas. Se aplicar assim, o ajuste automático fica em zero.
+              <span className="font-semibold" style={{ color: "var(--app-text)" }}>
+                Gastos previstos:
+              </span>{" "}
+              <span className="tabular-nums font-semibold" style={{ color: "var(--app-text)" }}>
+                {fmt(previewGastosPrevistos)}
+              </span>
+              {" — "}
+              soma dos lançamentos acima do fechamento no banco (
+              <span className="tabular-nums">{fmt(itemizedSum)}</span>
+              {" − "}
+              <span className="tabular-nums">{fmt(effectiveDeclaredTotal)}</span>
+              ).
             </div>
           ) : null}
           <button

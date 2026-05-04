@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import { bankPresetById } from "../data/cardBanks";
 import {
+  cardInvoiceHomeDisplay,
   monthCursorToYm,
   sumCardInvoiceInMonth,
   sumCardInvoiceItemizedInMonth,
@@ -31,12 +32,14 @@ const TAP_CANCEL_PX2 = 12 * 12;
 function CarouselCardFace({
   card,
   displayName,
-  invoice,
+  fatura,
+  gastosPrevistos,
   onOpen,
 }: {
   card: PaymentCard;
   displayName: string;
-  invoice: number;
+  fatura: number;
+  gastosPrevistos: number | null;
   onOpen: (c: PaymentCard) => void;
 }) {
   const tapRef = useRef<{ x: number; y: number } | null>(null);
@@ -122,14 +125,22 @@ function CarouselCardFace({
               className="text-[10px] font-semibold uppercase tracking-widest"
               style={{ color: "rgba(255,255,255,0.78)" }}
             >
-              Fatura
+              Fatura atual
             </p>
             <p
               className="text-2xl font-bold tabular-nums tracking-tight text-white"
               style={{ textShadow: "0 1px 2px rgba(0,0,0,0.18)" }}
             >
-              {fmt(invoice)}
+              {fmt(fatura)}
             </p>
+            {gastosPrevistos != null ? (
+              <p
+                className="mt-1.5 text-[11px] font-medium tabular-nums leading-snug"
+                style={{ color: "rgba(255,255,255,0.55)" }}
+              >
+                Gastos previstos · {fmt(gastosPrevistos)}
+              </p>
+            ) : null}
           </div>
           <p
             className="min-w-0 border-t pt-3 text-lg font-bold uppercase leading-snug tracking-wide text-white"
@@ -176,14 +187,23 @@ export function HomeCardsCarousel({
     return cards.map((c) => {
       const preset = bankPresetById(c.bankId);
       const displayName = c.label || preset?.label || c.bankId;
-        const declaredEntry = declaredCardInvoices[c.id]?.[ym];
-        const invoiceComputed = sumCardInvoiceInMonth(transactions, c.id, currentMonth);
-        const itemizedSum = sumCardInvoiceItemizedInMonth(transactions, c.id, currentMonth);
-        const invoice =
-          declaredEntry != null
-            ? Math.max(declaredEntry.total, invoiceComputed)
-            : invoiceComputed;
-      return { card: c, displayName, invoice, invoiceComputed, itemizedSum, declaredEntry };
+      const declaredEntry = declaredCardInvoices[c.id]?.[ym];
+      const invoiceComputed = sumCardInvoiceInMonth(transactions, c.id, currentMonth);
+      const itemizedSum = sumCardInvoiceItemizedInMonth(transactions, c.id, currentMonth);
+      const { fatura, gastosPrevistos } = cardInvoiceHomeDisplay({
+        declaredTotal: declaredEntry != null ? declaredEntry.total : null,
+        itemizedSum,
+        invoiceComputed,
+      });
+      return {
+        card: c,
+        displayName,
+        fatura,
+        gastosPrevistos,
+        invoiceComputed,
+        itemizedSum,
+        declaredEntry,
+      };
     });
   }, [cards, transactions, currentMonth, declaredCardInvoices]);
 
@@ -285,7 +305,7 @@ export function HomeCardsCarousel({
             msOverflowStyle: "none",
           }}
         >
-          {items.map(({ card, displayName, invoice }) => {
+          {items.map(({ card, displayName, fatura, gastosPrevistos }) => {
             return (
               <div
                 key={card.id}
@@ -299,7 +319,8 @@ export function HomeCardsCarousel({
                 <CarouselCardFace
                   card={card}
                   displayName={displayName}
-                  invoice={invoice}
+                  fatura={fatura}
+                  gastosPrevistos={gastosPrevistos}
                   onOpen={onPick}
                 />
               </div>

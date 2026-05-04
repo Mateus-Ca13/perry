@@ -16,7 +16,10 @@ export interface PaymentCard {
   label: string;
 }
 
-/** Valor total da fatura declarado pelo utilizador para um cartão num mês (YYYY-MM). */
+/**
+ * Valor total da fatura no banco (fechamento) para um cartão num mês (YYYY-MM).
+ * Pode ser menor que a soma dos lançamentos; a diferença aparece como “gastos previstos”.
+ */
 export interface CardDeclaredInvoiceEntry {
   total: number;
   /** Texto usado na despesa automática (“Demais gastos — …”). */

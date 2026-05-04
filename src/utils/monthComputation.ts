@@ -52,6 +52,27 @@ export function sumCardInvoiceItemizedInMonth(
 }
 
 /**
+ * Cartão na home: valor principal da “fatura” e, se aplicável, gastos previstos
+ * (soma dos lançamentos sem linha de ajuste acima do fechamento declarado no banco).
+ */
+export function cardInvoiceHomeDisplay(params: {
+  declaredTotal: number | null;
+  itemizedSum: number;
+  invoiceComputed: number;
+}): { fatura: number; gastosPrevistos: number | null } {
+  const { declaredTotal, itemizedSum, invoiceComputed } = params;
+  if (declaredTotal === null) {
+    return { fatura: invoiceComputed, gastosPrevistos: null };
+  }
+  const cents = Math.round(itemizedSum * 100) - Math.round(declaredTotal * 100);
+  const diff = cents / 100;
+  return {
+    fatura: declaredTotal,
+    gastosPrevistos: diff > 0 ? diff : null,
+  };
+}
+
+/**
  * Mês visto (YYYY-MM) estritamente antes do mês de hoje — ex. concluir abril só
  * depois de 1 de maio.
  */
