@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { SubPageLayout } from "../components/SubPageLayout";
 import { useCards } from "../context/CardsContext";
 import type { CardBankId } from "../types";
 import { bankPresetById, CARD_BANK_PRESETS } from "../data/cardBanks";
+import { nowMonthCursor } from "../utils/monthComputation";
 import { BankLogoMark } from "../components/BankLogoMark";
 
 export function CardsPage() {
@@ -119,15 +121,23 @@ export function CardsPage() {
                   borderBottom: i < cards.length - 1 ? "1px solid var(--app-border)" : undefined,
                 }}
               >
-                <BankLogoMark bankId={c.bankId} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: "var(--app-text)" }}>
-                    {name}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--app-muted)" }}>
-                    {preset?.label ?? c.bankId}
-                  </p>
-                </div>
+                <Link
+                  to={`/cartao/${c.id}`}
+                  state={{ month: nowMonthCursor() }}
+                  className="flex flex-1 min-w-0 items-center gap-3 py-1 -my-1 pr-1 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:opacity-85"
+                  aria-label={`Fatura — ${name}`}
+                >
+                  <BankLogoMark bankId={c.bankId} size="sm" />
+                  <span className="flex-1 min-w-0 block text-left">
+                    <p className="text-sm font-semibold truncate" style={{ color: "var(--app-text)" }}>
+                      {name}
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--app-muted)" }}>
+                      {preset?.label ?? c.bankId}
+                    </p>
+                  </span>
+                  <ChevronRight className="w-5 h-5 shrink-0 opacity-35" strokeWidth={2} aria-hidden />
+                </Link>
                 <button
                   type="button"
                   onClick={() => setRemovingId(c.id)}

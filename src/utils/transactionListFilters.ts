@@ -70,9 +70,14 @@ export function groupTransactionsByDate(
   return entries;
 }
 
-export function matchesCardFilter(tx: Transaction, cardId: string | null): boolean {
-  if (!cardId) return true;
-  return expenseUsesCard(tx) && tx.cardId === cardId;
+/** Token interno para filtro «só PIX» em despesas. */
+export const EXPENSE_PAYMENT_PIX_TOKEN = "__pix__";
+
+export function matchesExpensePaymentFilter(tx: Transaction, payment: string | null | undefined): boolean {
+  if (payment == null || payment === "") return true;
+  if (tx.type !== "expense") return true;
+  if (payment === EXPENSE_PAYMENT_PIX_TOKEN) return !expenseUsesCard(tx);
+  return expenseUsesCard(tx) && tx.cardId === payment;
 }
 
 export function applyListFilters(
@@ -81,15 +86,15 @@ export function applyListFilters(
     search: string;
     categoryId: string;
     sortMode: SortMode;
-    cardId?: string | null;
+    /** Despesas: filtro por cartão (`cardId`) ou só PIX (`EXPENSE_PAYMENT_PIX_TOKEN`). Omitido em receitas. */
+    expensePayment?: string | null;
   },
 ): Transaction[] {
-  const cardF = opts.cardId !== undefined ? opts.cardId : null;
   let out = txs.filter(
     (t) =>
       matchesSearch(t, opts.search) &&
       matchesCategory(t, opts.categoryId) &&
-      matchesCardFilter(t, cardF),
+      matchesExpensePaymentFilter(t, opts.expensePayment ?? null),
   );
   out = sortTransactions(out, opts.sortMode);
   return out;

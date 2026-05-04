@@ -4,6 +4,8 @@ import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import type { CategoryDef } from "../types";
 import type { SortMode } from "../utils/transactionListFilters";
 
+export type ExpensePaymentToolbarCard = { id: string; label: string };
+
 type Props = {
   categories: CategoryDef[];
   categoryFilter: string;
@@ -12,6 +14,10 @@ type Props = {
   onSortMode: (m: SortMode) => void;
   search: string;
   onSearch: (s: string) => void;
+  /** Despesas: filtro PIX / cartões (painel lateral). */
+  expensePaymentCards?: ExpensePaymentToolbarCard[];
+  expensePaymentValue?: string;
+  onExpensePaymentFilter?: (value: string) => void;
 };
 
 type SortField = "date" | "amount";
@@ -36,11 +42,21 @@ export function TransactionListToolbar({
   onSortMode,
   search,
   onSearch,
+  expensePaymentCards,
+  expensePaymentValue,
+  onExpensePaymentFilter,
 }: Props) {
   const [open, setOpen] = useState(false);
   const { field: sortField, dir: sortDir } = useMemo(() => parseSort(sortMode), [sortMode]);
 
-  const filtersDirty = categoryFilter !== "all" || sortMode !== "date-desc";
+  const paymentDirty =
+    expensePaymentValue !== undefined &&
+    expensePaymentValue !== "all";
+
+  const filtersDirty =
+    categoryFilter !== "all" ||
+    sortMode !== "date-desc" ||
+    paymentDirty;
 
   const selectClass =
     "w-full rounded-xl py-2.5 px-3 text-sm font-medium outline-none border border-solid cursor-pointer";
@@ -154,6 +170,33 @@ export function TransactionListToolbar({
                   ))}
                 </select>
               </label>
+
+              {expensePaymentCards != null &&
+              onExpensePaymentFilter != null &&
+              expensePaymentValue != null ? (
+                <label className="block">
+                  <span
+                    className="text-[11px] font-semibold uppercase tracking-wide mb-1.5 block"
+                    style={{ color: "var(--app-muted)" }}
+                  >
+                    Pagamento
+                  </span>
+                  <select
+                    value={expensePaymentValue}
+                    onChange={(e) => onExpensePaymentFilter(e.target.value)}
+                    className={selectClass}
+                    style={selectStyle}
+                  >
+                    <option value="all">Todos</option>
+                    <option value="pix">PIX</option>
+                    {expensePaymentCards.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
 
               <div>
                 <span className="text-[11px] font-semibold uppercase tracking-wide mb-1.5 block" style={{ color: "var(--app-muted)" }}>

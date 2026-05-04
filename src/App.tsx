@@ -8,6 +8,7 @@ import { FilteredTransactionsPage } from "./pages/FilteredTransactionsPage";
 import { HomePage } from "./pages/HomePage";
 import { InvestmentsPage } from "./pages/InvestmentsPage";
 import { MenuPage } from "./pages/MenuPage";
+import { CardInvoicePage } from "./pages/CardInvoicePage";
 import { CardsPage } from "./pages/CardsPage";
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
                 <Route path="/despesas" element={<FilteredTransactionsPage mode="expense" />} />
                 <Route path="/investimentos" element={<InvestmentsPage />} />
                 <Route path="/cartoes" element={<CardsPage />} />
+                <Route path="/cartao/:cardId" element={<CardInvoicePage />} />
                 <Route path="/menu" element={<MenuPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

@@ -1,11 +1,10 @@
 import { useMemo } from "react";
 import { Repeat } from "lucide-react";
 import { useCards } from "../context/CardsContext";
-import { bankPresetById } from "../data/cardBanks";
+import { ExpensePaymentGlyph } from "./ExpensePaymentGlyph";
 import { getCatInfo } from "../utils/categories";
 import { fmt, fmtListDay } from "../utils/format";
 import type { Transaction } from "../types";
-import { expenseUsesCard } from "../utils/monthComputation";
 
 type Props = {
   tx: Transaction;
@@ -29,30 +28,10 @@ export function TransactionRow({ tx, isLast, onTap, showDayOnMeta }: Props) {
       ? "color-mix(in srgb, var(--app-accent) 14%, transparent)"
       : "rgba(255,59,48,0.1)";
 
-  const subtitleExtra = useMemo(() => {
-    if (tx.type !== "expense") return null;
-    if (expenseUsesCard(tx) && tx.cardId) {
-      const c = cards.find((x) => x.id === tx.cardId);
-      const name = c ? c.label || bankPresetById(c.bankId)?.label : null;
-      return name ? `Cartão · ${name}` : "Cartão";
-    }
-    return "PIX";
-  }, [tx.type, tx.paymentMethod, tx.cardId, cards]);
-
   const dayMetaPrefix = useMemo(() => {
     if (!showDayOnMeta || (tx.type !== "income" && tx.type !== "expense")) return null;
     return fmtListDay(tx.date);
   }, [showDayOnMeta, tx.date, tx.type]);
-
-  const metaLine = useMemo(() => {
-    const base = isInvestment
-      ? `Investimento · ${cat.label}`
-      : tx.type === "expense" && subtitleExtra
-        ? `${cat.label} · ${subtitleExtra}`
-        : cat.label;
-    if (dayMetaPrefix) return `${dayMetaPrefix} · ${base}`;
-    return base;
-  }, [isInvestment, tx.type, cat.label, subtitleExtra, dayMetaPrefix]);
 
   const showStatusBadge = tx.type === "expense" || tx.type === "investment";
 
@@ -72,8 +51,8 @@ export function TransactionRow({ tx, isLast, onTap, showDayOnMeta }: Props) {
       >
         <CatIcon className="w-[22px] h-[22px]" strokeWidth={2} style={{ color: iconColor }} />
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold truncate" style={{ color: "var(--app-text)" }}>
             {tx.description}
           </p>
@@ -109,8 +88,29 @@ export function TransactionRow({ tx, isLast, onTap, showDayOnMeta }: Props) {
             )
           ) : null}
         </div>
-        <p className="text-xs" style={{ color: "var(--app-muted)" }}>
-          {metaLine}
+        <p
+          className="text-xs flex items-center gap-2 flex-wrap min-w-0"
+          style={{ color: "var(--app-muted)" }}
+        >
+          {showDayOnMeta && dayMetaPrefix ? (
+            <>
+              <span>{dayMetaPrefix}</span>
+              <span aria-hidden="true">·</span>
+            </>
+          ) : null}
+          {isInvestment ? (
+            <span>
+              Investimento · {cat.label}
+            </span>
+          ) : tx.type === "expense" ? (
+            <>
+              <span>{cat.label}</span>
+              <span aria-hidden="true">·</span>
+              <ExpensePaymentGlyph tx={tx} cards={cards} />
+            </>
+          ) : (
+            <span>{cat.label}</span>
+          )}
         </p>
       </div>
       <p

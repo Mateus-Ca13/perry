@@ -3,7 +3,6 @@ import { Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import type {
   CardBankId,
-  CardDeclaredInvoiceEntry,
   CardDeclaredInvoicesMap,
   MonthCursor,
   PaymentCard,
@@ -18,7 +17,7 @@ import {
 } from "../utils/monthComputation";
 import { fmt } from "../utils/format";
 import { BankLogoMark } from "./BankLogoMark";
-import { CardQuickActionDialog } from "./CardQuickActionDialog";
+import { CardHomeTapDialog } from "./CardHomeTapDialog";
 
 const CARD_FACE_GRADIENT: Record<CardBankId, string> = {
   nubank: "linear-gradient(148deg, #4a0674 0%, #820ad1 45%, #b04ef0 100%)",
@@ -28,7 +27,7 @@ const CARD_FACE_GRADIENT: Record<CardBankId, string> = {
 
 const TAP_CANCEL_PX2 = 12 * 12;
 
-/** Cartão do carrossel: não abre o diálogo se o dedo se moveu (scroll da página ou arrasto horizontal). */
+/** Cartão do carrossel: abre escolha (despesa ou fatura); ignora toque após arrasto. */
 function CarouselCardFace({
   card,
   displayName,
@@ -40,7 +39,7 @@ function CarouselCardFace({
   displayName: string;
   fatura: number;
   gastosPrevistos: number | null;
-  onOpen: (c: PaymentCard) => void;
+  onOpen: () => void;
 }) {
   const tapRef = useRef<{ x: number; y: number } | null>(null);
   const cancelTapRef = useRef(false);
@@ -67,8 +66,8 @@ function CarouselCardFace({
       cancelTapRef.current = false;
       return;
     }
-    onOpen(card);
-  }, [card, onOpen]);
+    onOpen();
+  }, [onOpen]);
 
   return (
     <div
@@ -82,7 +81,7 @@ function CarouselCardFace({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onOpen(card);
+          onOpen();
         }
       }}
       className="relative w-full max-w-full cursor-pointer overflow-hidden rounded-2xl text-left shadow-lg outline-none active:scale-[0.99] active:opacity-95 transition-[transform,opacity] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-[var(--app-page)]"
@@ -162,12 +161,7 @@ type Props = {
   transactions: Transaction[];
   currentMonth: MonthCursor;
   declaredCardInvoices: CardDeclaredInvoicesMap;
-  onAddExpenseForCard: (cardId: string) => void;
-  onSaveDeclaredCardInvoice: (
-    cardId: string,
-    month: MonthCursor,
-    entry: CardDeclaredInvoiceEntry | null,
-  ) => void;
+  onOpenExpenseForCard: (cardId: string) => void;
 };
 
 export function HomeCardsCarousel({
@@ -175,10 +169,9 @@ export function HomeCardsCarousel({
   transactions,
   currentMonth,
   declaredCardInvoices,
-  onAddExpenseForCard,
-  onSaveDeclaredCardInvoice,
+  onOpenExpenseForCard,
 }: Props) {
-  const [activeCard, setActiveCard] = useState<PaymentCard | null>(null);
+  const [choice, setChoice] = useState<{ card: PaymentCard; displayName: string } | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -200,18 +193,11 @@ export function HomeCardsCarousel({
         displayName,
         fatura,
         gastosPrevistos,
-        invoiceComputed,
-        itemizedSum,
-        declaredEntry,
       };
     });
   }, [cards, transactions, currentMonth, declaredCardInvoices]);
 
   const carouselSlideCount = cards.length > 0 ? items.length + 1 : 0;
-
-  const onPick = useCallback((c: PaymentCard) => {
-    setActiveCard(c);
-  }, []);
 
   useEffect(() => {
     setSlideIndex(0);
@@ -270,85 +256,83 @@ export function HomeCardsCarousel({
   }
 
   return (
-    <>
-      <div className="mt-4">
-        <div className="px-5 flex items-center justify-between gap-2 mb-2">
-          <h3 className="text-md font-semibold" style={{ color: "var(--app-muted)" }}>
-            Cartões
-          </h3>
-          {carouselSlideCount > 1 ? (
-            <div className="flex gap-1.5 shrink-0" aria-hidden>
-              {Array.from({ length: carouselSlideCount }, (_, i) => (
-                <span
-                  key={i}
-                  className="block rounded-full transition-all"
-                  style={{
-                    width: i === slideIndex ? 14 : 6,
-                    height: 6,
-                    backgroundColor:
-                      i === slideIndex ? "var(--app-accent)" : "var(--app-border)",
-                  }}
-                />
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        <div
-          ref={trackRef}
-          className="home-cards-track flex w-full min-w-0 overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory"
-          style={{
-            scrollSnapType: "x mandatory",
-            WebkitOverflowScrolling: "touch",
-            touchAction: "pan-x pan-y pinch-zoom",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
-        >
-          {items.map(({ card, displayName, fatura, gastosPrevistos }) => {
-            return (
-              <div
-                key={card.id}
-                className="w-full shrink-0 snap-center snap-always box-border px-5"
+    <div className="mt-4">
+      <div className="px-5 flex items-center justify-between gap-2 mb-2">
+        <h3 className="text-md font-semibold" style={{ color: "var(--app-muted)" }}>
+          Cartões
+        </h3>
+        {carouselSlideCount > 1 ? (
+          <div className="flex gap-1.5 shrink-0" aria-hidden>
+            {Array.from({ length: carouselSlideCount }, (_, i) => (
+              <span
+                key={i}
+                className="block rounded-full transition-all"
                 style={{
-                  flex: "0 0 100%",
-                  scrollSnapAlign: "center",
-                  scrollSnapStop: "always",
+                  width: i === slideIndex ? 14 : 6,
+                  height: 6,
+                  backgroundColor:
+                    i === slideIndex ? "var(--app-accent)" : "var(--app-border)",
                 }}
-              >
-                <CarouselCardFace
-                  card={card}
-                  displayName={displayName}
-                  fatura={fatura}
-                  gastosPrevistos={gastosPrevistos}
-                  onOpen={onPick}
-                />
-              </div>
-            );
-          })}
-          <div
-            className="w-full shrink-0 snap-center snap-always box-border px-5"
-            style={{
-              flex: "0 0 100%",
-              scrollSnapAlign: "center",
-              scrollSnapStop: "always",
-            }}
-          >
-            <Link
-              to="/cartoes"
-              className="relative flex w-full max-w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 text-center outline-none active:scale-[0.99] active:opacity-95 transition-[transform,opacity] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-[var(--app-page)]"
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        ref={trackRef}
+        className="home-cards-track flex w-full min-w-0 overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory"
+        style={{
+          scrollSnapType: "x mandatory",
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-x pan-y pinch-zoom",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
+      >
+        {items.map(({ card, displayName, fatura, gastosPrevistos }) => {
+          return (
+            <div
+              key={card.id}
+              className="w-full shrink-0 snap-center snap-always box-border px-5"
               style={{
-                aspectRatio: "1.586",
-                backgroundColor: "var(--app-card)",
-                boxShadow: "0 10px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.22)",
+                flex: "0 0 100%",
+                scrollSnapAlign: "center",
+                scrollSnapStop: "always",
               }}
             >
-              <Plus className="w-10 h-10 shrink-0 sm:w-12 sm:h-12" strokeWidth={1.5} style={{ color: "var(--app-handlebar)" }} />
-              <p className="text-sm font-medium" style={{ color: "var(--app-muted)" }}>
-                Adicionar cartão
-              </p>
-            </Link>
-          </div>
+              <CarouselCardFace
+                card={card}
+                displayName={displayName}
+                fatura={fatura}
+                gastosPrevistos={gastosPrevistos}
+                onOpen={() => setChoice({ card, displayName })}
+              />
+            </div>
+          );
+        })}
+        <div
+          className="w-full shrink-0 snap-center snap-always box-border px-5"
+          style={{
+            flex: "0 0 100%",
+            scrollSnapAlign: "center",
+            scrollSnapStop: "always",
+          }}
+        >
+          <Link
+            to="/cartoes"
+            className="relative flex w-full max-w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 text-center outline-none active:scale-[0.99] active:opacity-95 transition-[transform,opacity] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-[var(--app-page)]"
+            style={{
+              aspectRatio: "1.586",
+              backgroundColor: "var(--app-card)",
+              boxShadow: "0 10px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.22)",
+            }}
+          >
+            <Plus className="w-10 h-10 shrink-0 sm:w-12 sm:h-12" strokeWidth={1.5} style={{ color: "var(--app-handlebar)" }} />
+            <p className="text-sm font-medium" style={{ color: "var(--app-muted)" }}>
+              Adicionar cartão
+            </p>
+          </Link>
         </div>
       </div>
 
@@ -356,32 +340,19 @@ export function HomeCardsCarousel({
         .home-cards-track::-webkit-scrollbar { display: none; }
       `}</style>
 
-      {activeCard ? (
-        (() => {
-          const ym = monthCursorToYm(currentMonth);
-          const preset = bankPresetById(activeCard.bankId);
-          const displayName = activeCard.label || preset?.label || activeCard.bankId;
-          const declaredEntry = declaredCardInvoices[activeCard.id]?.[ym];
-          const invoiceComputed = sumCardInvoiceInMonth(transactions, activeCard.id, currentMonth);
-          const itemizedSum = sumCardInvoiceItemizedInMonth(transactions, activeCard.id, currentMonth);
-          return (
-            <CardQuickActionDialog
-              card={activeCard}
-              displayName={displayName}
-              invoiceTotal={invoiceComputed}
-              itemizedSum={itemizedSum}
-              declaredEntry={declaredEntry}
-              currentMonth={currentMonth}
-              bankId={activeCard.bankId}
-              onClose={() => setActiveCard(null)}
-              onAddExpense={() => onAddExpenseForCard(activeCard.id)}
-              onSaveDeclaredInvoice={(entry) =>
-                onSaveDeclaredCardInvoice(activeCard.id, currentMonth, entry)
-              }
-            />
-          );
-        })()
+      {choice ? (
+        <CardHomeTapDialog
+          card={choice.card}
+          displayName={choice.displayName}
+          currentMonth={currentMonth}
+          onClose={() => setChoice(null)}
+          onAddExpense={() => {
+            const id = choice.card.id;
+            setChoice(null);
+            queueMicrotask(() => onOpenExpenseForCard(id));
+          }}
+        />
       ) : null}
-    </>
+    </div>
   );
 }

@@ -22,7 +22,7 @@ import type {
 } from "../types";
 import { applyDeclaredInvoiceAdjustments } from "../utils/cardDeclaredInvoice";
 import { todayISO } from "../utils/format";
-import { monthCursorToYm } from "../utils/monthComputation";
+import { expenseUsesCard, monthCursorToYm } from "../utils/monthComputation";
 import {
   addCalendarMonths,
   buildMissingOccurrences,
@@ -96,6 +96,8 @@ type TransactionsContextValue = {
     entry: CardDeclaredInvoiceEntry | null,
   ) => void;
   clearDeclaredInvoicesForCard: (cardId: string) => void;
+  /** Marca como pagas todas as despesas no cartão naquele mês de calendário. */
+  payCardInvoiceInMonth: (cardId: string, month: MonthCursor) => void;
 };
 
 const TransactionsContext = createContext<TransactionsContextValue | null>(null);
@@ -182,6 +184,20 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const payCardInvoiceInMonth = useCallback(
+    (cardId: string, month: MonthCursor) => {
+      const ym = monthCursorToYm(month);
+      setTransactions((prev) =>
+        prev.map((t) => {
+          if (t.type !== "expense" || !expenseUsesCard(t) || t.cardId !== cardId) return t;
+          if (!t.date.startsWith(ym) || t.paid) return t;
+          return { ...t, paid: true };
+        }),
+      );
+    },
+    [setTransactions],
+  );
 
   const setDeclaredCardInvoice = useCallback(
     (cardId: string, month: MonthCursor, entry: CardDeclaredInvoiceEntry | null) => {
@@ -546,6 +562,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       stripCardFromTransactions,
       setDeclaredCardInvoice,
       clearDeclaredInvoicesForCard,
+      payCardInvoiceInMonth,
     }),
     [
       transactions,
@@ -556,6 +573,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       stripCardFromTransactions,
       setDeclaredCardInvoice,
       clearDeclaredInvoicesForCard,
+      payCardInvoiceInMonth,
     ],
   );
 

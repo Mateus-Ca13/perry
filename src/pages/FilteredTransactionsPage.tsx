@@ -1,11 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { bankPresetById } from "../data/cardBanks";
 import { EXPENSE_CATS, INCOME_CATS } from "../constants";
 import { FlatTransactionList } from "../components/FlatTransactionList";
 import { RecurringHorizonNotice } from "../components/RecurringHorizonNotice";
 import { SubPageLayout } from "../components/SubPageLayout";
-import { TransactionGroupedList } from "../components/TransactionGroupedList";
 import { TransactionListToolbar } from "../components/TransactionListToolbar";
 import { useCards } from "../context/CardsContext";
 import { useTransactions } from "../context/TransactionsContext";
@@ -17,8 +16,7 @@ import {
 } from "../utils/monthComputation";
 import {
   applyListFilters,
-  groupTransactionsByDate,
-  isDateSort,
+  EXPENSE_PAYMENT_PIX_TOKEN,
   type SortMode,
 } from "../utils/transactionListFilters";
 import { isMonthBeyondRecurringWindow } from "../utils/recurringMaterialize";
@@ -58,6 +56,7 @@ export function FilteredTransactionsPage({ mode }: Props) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
+  const [expensePaymentFilter, setExpensePaymentFilter] = useState<"all" | "pix" | string>("all");
 
   const filterCardId = mode === "expense" ? searchParams.get("cartao") : null;
   const filterCard =
@@ -70,6 +69,50 @@ export function FilteredTransactionsPage({ mode }: Props) {
     next.delete("cartao");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (mode !== "expense") return;
+    const cid = searchParams.get("cartao");
+    if (cid) setExpensePaymentFilter(cid);
+    else setExpensePaymentFilter((prev) => (prev === "pix" ? "pix" : "all"));
+  }, [mode, filterCardId]);
+
+  const expensePaymentToolbarCards = useMemo(() => {
+    if (mode !== "expense") return undefined;
+    return cards.map((c) => ({
+      id: c.id,
+      label: c.label || bankPresetById(c.bankId)?.label || "Cartão",
+    }));
+  }, [mode, cards]);
+
+  const paymentSelectValue =
+    filterCardId != null && filterCardId !== "" ? filterCardId : expensePaymentFilter;
+
+  const handleExpensePaymentChange = useCallback(
+    (v: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (v === "all") {
+        next.delete("cartao");
+        setExpensePaymentFilter("all");
+      } else if (v === "pix") {
+        next.delete("cartao");
+        setExpensePaymentFilter("pix");
+      } else {
+        next.set("cartao", v);
+        setExpensePaymentFilter(v);
+      }
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const resolvedExpensePayment = useMemo(() => {
+    if (mode !== "expense") return undefined;
+    if (filterCardId != null && filterCardId !== "") return filterCardId;
+    if (expensePaymentFilter === "pix") return EXPENSE_PAYMENT_PIX_TOKEN;
+    if (expensePaymentFilter === "all") return null;
+    return expensePaymentFilter;
+  }, [mode, filterCardId, expensePaymentFilter]);
 
   const beyondHorizon = useMemo(
     () => isMonthBeyondRecurringWindow(currentMonth, today),
@@ -92,18 +135,15 @@ export function FilteredTransactionsPage({ mode }: Props) {
         search,
         categoryId: categoryFilter,
         sortMode,
-        cardId: filterCardId || null,
+        expensePayment: resolvedExpensePayment ?? undefined,
       }),
-    [forList, search, categoryFilter, sortMode, filterCardId],
+    [forList, search, categoryFilter, sortMode, resolvedExpensePayment],
   );
 
-  const grouped = useMemo(() => {
-    if (!isDateSort(sortMode)) return [];
-    return groupTransactionsByDate(filtered, sortMode === "date-desc" ? "desc" : "asc");
-  }, [filtered, sortMode]);
-
   const emptyText =
-    forList.length === 0 ? empty : "Nenhum lançamento combina com a busca ou a categoria.";
+    forList.length === 0
+      ? empty
+      : "Nenhum lançamento combina com a busca, categoria ou pagamento.";
 
   const prevMonth = useCallback(() => {
     setCurrentMonth((p) => {
@@ -164,15 +204,17 @@ export function FilteredTransactionsPage({ mode }: Props) {
             onSortMode={setSortMode}
             search={search}
             onSearch={setSearch}
+            expensePaymentCards={expensePaymentToolbarCards}
+            expensePaymentValue={mode === "expense" ? paymentSelectValue : undefined}
+            onExpensePaymentFilter={mode === "expense" ? handleExpensePaymentChange : undefined}
           />
 
-          {isDateSort(sortMode) ? (
-            <TransactionGroupedList grouped={grouped} onEdit={openEdit} emptyText={emptyText} />
-          ) : filtered.length === 0 ? (
-            <TransactionGroupedList grouped={[]} onEdit={openEdit} emptyText={emptyText} />
-          ) : (
-            <FlatTransactionList transactions={filtered} onEdit={openEdit} />
-          )}
+          <FlatTransactionList
+            transactions={filtered}
+            onEdit={openEdit}
+            showDayOnMeta
+            emptyText={emptyText}
+          />
         </>
       )}
     </SubPageLayout>
