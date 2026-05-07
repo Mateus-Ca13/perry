@@ -64,9 +64,9 @@ export function PayCardInvoiceConfirmDialog({
           <strong style={{ color: "var(--app-text)" }}>
             {pendingCount} despesa{pendingCount === 1 ? "" : "s"} pendente{pendingCount === 1 ? "" : "s"}
           </strong>{" "}
-          deste cartão em <strong style={{ color: "var(--app-text)" }}>{monthLabel}</strong>. Isto só
-          altera o estado de quitação dos lançamentos (Pago / Pendente), não os valores nem o total da
-          fatura.
+          deste cartão em <strong style={{ color: "var(--app-text)" }}>{monthLabel}</strong> que já
+          venceram até hoje. Isto só altera o estado de quitação dos lançamentos (Pago / Pendente), não
+          os valores nem o total da fatura.
         </p>
         <div className="flex gap-2">
           <button

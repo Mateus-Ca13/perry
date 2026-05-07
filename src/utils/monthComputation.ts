@@ -1,4 +1,5 @@
 import type { MonthCursor, MonthSummary, Transaction } from "../types";
+import { todayISO } from "./format";
 
 /** Despesa ligada a cartão: campo explícito ou legado só com `cardId`. */
 export function expenseUsesCard(t: Transaction): boolean {
@@ -16,60 +17,42 @@ export function monthCursorToYm(c: MonthCursor): string {
   return `${c.year}-${String(c.month + 1).padStart(2, "0")}`;
 }
 
-/** Soma das despesas do mês lançadas neste cartão (fatura do mês visto), inclui linha de ajuste da fatura se existir. */
+/** Soma das despesas já lançadas no mês para este cartão (até hoje). */
 export function sumCardInvoiceInMonth(
   transactions: Transaction[],
   cardId: string,
   month: MonthCursor,
+  today: string = todayISO(),
 ): number {
   const ym = monthCursorToYm(month);
   return transactions
     .filter(
       (t) =>
         expenseUsesCard(t) &&
+        t.date <= today &&
         t.date.startsWith(ym) &&
         t.cardId === cardId,
     )
     .reduce((s, t) => s + t.amount, 0);
 }
 
-/** Igual a `sumCardInvoiceInMonth` mas sem a despesa automática de fecho da fatura declarada. */
-export function sumCardInvoiceItemizedInMonth(
+/** Soma das despesas futuras do mês para este cartão (data > hoje). */
+export function sumCardInvoiceFutureInMonth(
   transactions: Transaction[],
   cardId: string,
   month: MonthCursor,
+  today: string = todayISO(),
 ): number {
   const ym = monthCursorToYm(month);
   return transactions
     .filter(
       (t) =>
         expenseUsesCard(t) &&
-        !t.cardInvoiceAdjustment &&
+        t.date > today &&
         t.date.startsWith(ym) &&
         t.cardId === cardId,
     )
     .reduce((s, t) => s + t.amount, 0);
-}
-
-/**
- * Cartão na home: valor principal da “fatura” e, se aplicável, gastos previstos
- * (soma dos lançamentos sem linha de ajuste acima do fechamento declarado no banco).
- */
-export function cardInvoiceHomeDisplay(params: {
-  declaredTotal: number | null;
-  itemizedSum: number;
-  invoiceComputed: number;
-}): { fatura: number; gastosPrevistos: number | null } {
-  const { declaredTotal, itemizedSum, invoiceComputed } = params;
-  if (declaredTotal === null) {
-    return { fatura: invoiceComputed, gastosPrevistos: null };
-  }
-  const cents = Math.round(itemizedSum * 100) - Math.round(declaredTotal * 100);
-  const diff = cents / 100;
-  return {
-    fatura: declaredTotal,
-    gastosPrevistos: diff > 0 ? diff : null,
-  };
 }
 
 /**

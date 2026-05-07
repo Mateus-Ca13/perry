@@ -12,15 +12,12 @@ import {
 import { FloatingDock } from "../components/FloatingDock";
 import { TransactionModal } from "../components/TransactionModal";
 import type {
-  CardDeclaredInvoiceEntry,
-  CardDeclaredInvoicesMap,
   MonthCursor,
   PaymentMethod,
   RecurringRule,
   SaveTransactionPayload,
   Transaction,
 } from "../types";
-import { applyDeclaredInvoiceAdjustments } from "../utils/cardDeclaredInvoice";
 import { todayISO } from "../utils/format";
 import { expenseUsesCard, monthCursorToYm } from "../utils/monthComputation";
 import {
@@ -32,9 +29,7 @@ import {
 } from "../utils/recurringMaterialize";
 import { uid } from "../utils/id";
 import {
-  loadCardDeclaredInvoices,
   loadPersistedAppState,
-  saveCardDeclaredInvoices,
   saveRecurringRules,
   saveTransactions,
 } from "../utils/storage";
@@ -85,17 +80,10 @@ export function TransactionsOutlet() {
 
 type TransactionsContextValue = {
   transactions: Transaction[];
-  declaredCardInvoices: CardDeclaredInvoicesMap;
   openEdit: (tx: Transaction) => void;
   addTransaction: (tx: Omit<Transaction, "id">) => void;
   openNewExpenseWithPayment: (prefill: ExpenseModalPrefill) => void;
   stripCardFromTransactions: (cardId: string) => void;
-  setDeclaredCardInvoice: (
-    cardId: string,
-    month: MonthCursor,
-    entry: CardDeclaredInvoiceEntry | null,
-  ) => void;
-  clearDeclaredInvoicesForCard: (cardId: string) => void;
   /** Marca como pagas todas as despesas no cartão naquele mês de calendário. */
   payCardInvoiceInMonth: (cardId: string, month: MonthCursor) => void;
 };
@@ -111,42 +99,23 @@ export function useTransactions() {
 }
 
 const persistedApp = loadPersistedAppState();
-const initialDeclaredInvoices = loadCardDeclaredInvoices();
-const initialTransactions = applyDeclaredInvoiceAdjustments(
-  persistedApp.transactions,
-  initialDeclaredInvoices,
-);
+const initialTransactions = persistedApp.transactions.filter((t) => !t.cardInvoiceAdjustment);
 
 export function TransactionsProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactionsInner] = useState<Transaction[]>(() => initialTransactions);
   const [recurringRules, setRecurringRules] = useState<RecurringRule[]>(() => persistedApp.rules);
-  const [declaredCardInvoices, setDeclaredCardInvoices] = useState(() => initialDeclaredInvoices);
   const [showModal, setShowModal] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [modalExpensePrefill, setModalExpensePrefill] = useState<ExpenseModalPrefill | null>(null);
   const rulesRef = useRef(recurringRules);
   rulesRef.current = recurringRules;
 
-  const declaredCardInvoicesRef = useRef(declaredCardInvoices);
-  declaredCardInvoicesRef.current = declaredCardInvoices;
-
   const setTransactions = useCallback((action: SetStateAction<Transaction[]>) => {
     setTransactionsInner((prev) => {
       const base = typeof action === "function" ? action(prev) : action;
-      return applyDeclaredInvoiceAdjustments(base, declaredCardInvoicesRef.current);
+      return base.filter((t) => !t.cardInvoiceAdjustment);
     });
   }, []);
-
-  useEffect(() => {
-    declaredCardInvoicesRef.current = declaredCardInvoices;
-    setTransactionsInner((prev) =>
-      applyDeclaredInvoiceAdjustments(prev, declaredCardInvoices),
-    );
-  }, [declaredCardInvoices]);
-
-  useEffect(() => {
-    saveCardDeclaredInvoices(declaredCardInvoices);
-  }, [declaredCardInvoices]);
 
   useEffect(() => {
     saveTransactions(transactions);
@@ -176,46 +145,19 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [setTransactions]);
 
-  const clearDeclaredInvoicesForCard = useCallback((cardId: string) => {
-    setDeclaredCardInvoices((prev) => {
-      if (!prev[cardId]) return prev;
-      const next = { ...prev };
-      delete next[cardId];
-      return next;
-    });
-  }, []);
-
   const payCardInvoiceInMonth = useCallback(
     (cardId: string, month: MonthCursor) => {
       const ym = monthCursorToYm(month);
+      const today = todayISO();
       setTransactions((prev) =>
         prev.map((t) => {
           if (t.type !== "expense" || !expenseUsesCard(t) || t.cardId !== cardId) return t;
-          if (!t.date.startsWith(ym) || t.paid) return t;
+          if (!t.date.startsWith(ym) || t.date > today || t.paid) return t;
           return { ...t, paid: true };
         }),
       );
     },
     [setTransactions],
-  );
-
-  const setDeclaredCardInvoice = useCallback(
-    (cardId: string, month: MonthCursor, entry: CardDeclaredInvoiceEntry | null) => {
-      const ym = monthCursorToYm(month);
-      setDeclaredCardInvoices((prev) => {
-        const next = { ...prev };
-        const cardMap = { ...(next[cardId] ?? {}) };
-        if (entry === null) {
-          delete cardMap[ym];
-        } else {
-          cardMap[ym] = entry;
-        }
-        if (Object.keys(cardMap).length === 0) delete next[cardId];
-        else next[cardId] = cardMap;
-        return next;
-      });
-    },
-    [],
   );
 
   const openNew = useCallback(() => {
@@ -232,16 +174,13 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
 
   const stripCardFromTransactions = useCallback(
     (cardId: string) => {
-      clearDeclaredInvoicesForCard(cardId);
       setTransactions((prev) =>
-        prev
-          .filter((t) => !(t.cardInvoiceAdjustment && t.cardId === cardId))
-          .map((t) =>
-            t.cardId === cardId ? { ...t, paymentMethod: "pix" as const, cardId: undefined } : t,
-          ),
+        prev.map((t) =>
+          t.cardId === cardId ? { ...t, paymentMethod: "pix" as const, cardId: undefined } : t,
+        ),
       );
     },
-    [clearDeclaredInvoicesForCard, setTransactions],
+    [setTransactions],
   );
 
   const openEdit = useCallback((tx: Transaction) => {
@@ -281,13 +220,9 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
 
   const deleteTransaction = useCallback(
     (id: string, scope: "single" | "allFuture" = "single") => {
-      let clearDecl: { cardId: string; ym: string } | null = null;
       setTransactions((prev) => {
         const t = prev.find((x) => x.id === id);
         if (!t) return prev;
-        if (t.cardInvoiceAdjustment && t.cardId && scope === "single") {
-          clearDecl = { cardId: t.cardId, ym: t.date.slice(0, 7) };
-        }
         if (t.recurrenceRuleId) {
           const ruleId = t.recurrenceRuleId;
           const deletedYm = t.date.slice(0, 7);
@@ -317,17 +252,6 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
         }
         return prev.filter((x) => x.id !== id);
       });
-      if (clearDecl) {
-        const { cardId, ym } = clearDecl;
-        setDeclaredCardInvoices((decl) => {
-          const next = { ...decl };
-          const cm = { ...(next[cardId] ?? {}) };
-          delete cm[ym];
-          if (Object.keys(cm).length === 0) delete next[cardId];
-          else next[cardId] = cm;
-          return next;
-        });
-      }
     },
     [setTransactions],
   );
@@ -555,24 +479,18 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       transactions,
-      declaredCardInvoices,
       openEdit,
       addTransaction,
       openNewExpenseWithPayment,
       stripCardFromTransactions,
-      setDeclaredCardInvoice,
-      clearDeclaredInvoicesForCard,
       payCardInvoiceInMonth,
     }),
     [
       transactions,
-      declaredCardInvoices,
       openEdit,
       addTransaction,
       openNewExpenseWithPayment,
       stripCardFromTransactions,
-      setDeclaredCardInvoice,
-      clearDeclaredInvoicesForCard,
       payCardInvoiceInMonth,
     ],
   );

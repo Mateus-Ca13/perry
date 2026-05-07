@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronRight, CircleCheck, Pencil } from "lucide-react";
+import { ChevronRight, CircleCheck } from "lucide-react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { BankLogoMark } from "../components/BankLogoMark";
-import { InvoiceClosingDialog } from "../components/InvoiceClosingDialog";
 import { PayCardInvoiceConfirmDialog } from "../components/PayCardInvoiceConfirmDialog";
 import { SubPageLayout } from "../components/SubPageLayout";
 import { TransactionRow } from "../components/TransactionRow";
@@ -10,14 +9,13 @@ import { useCards } from "../context/CardsContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { CardBankId, MonthCursor, Transaction } from "../types";
 import { bankPresetById } from "../data/cardBanks";
-import { fmt } from "../utils/format";
+import { fmt, todayISO } from "../utils/format";
 import {
-  cardInvoiceHomeDisplay,
   expenseUsesCard,
   monthCursorToYm,
   nowMonthCursor,
+  sumCardInvoiceFutureInMonth,
   sumCardInvoiceInMonth,
-  sumCardInvoiceItemizedInMonth,
 } from "../utils/monthComputation";
 
 const CARD_FACE_GRADIENT: Record<CardBankId, string> = {
@@ -54,11 +52,10 @@ export function CardInvoicePage() {
   const { cards } = useCards();
   const {
     transactions,
-    declaredCardInvoices,
-    setDeclaredCardInvoice,
     payCardInvoiceInMonth,
     openEdit,
   } = useTransactions();
+  const today = todayISO();
 
   const initialMonth =
     (location.state as { month?: MonthCursor } | null)?.month ?? nowMonthCursor();
@@ -80,32 +77,18 @@ export function CardInvoicePage() {
     : "";
 
   const invoiceTotal = useMemo(
-    () => (card ? sumCardInvoiceInMonth(transactions, card.id, currentMonth) : 0),
-    [transactions, card, currentMonth],
+    () => (card ? sumCardInvoiceInMonth(transactions, card.id, currentMonth, today) : 0),
+    [transactions, card, currentMonth, today],
   );
 
-  const itemizedSum = useMemo(
-    () => (card ? sumCardInvoiceItemizedInMonth(transactions, card.id, currentMonth) : 0),
-    [transactions, card, currentMonth],
+  const futureInvoiceTotal = useMemo(
+    () => (card ? sumCardInvoiceFutureInMonth(transactions, card.id, currentMonth, today) : 0),
+    [transactions, card, currentMonth, today],
   );
-
-  const declaredEntry = card ? declaredCardInvoices[card.id]?.[ym] : undefined;
-
-  const { fatura: faturaDisplay, gastosPrevistos } = useMemo(
-    () =>
-      cardInvoiceHomeDisplay({
-        declaredTotal: declaredEntry != null ? declaredEntry.total : null,
-        itemizedSum,
-        invoiceComputed: invoiceTotal,
-      }),
-    [declaredEntry, itemizedSum, invoiceTotal],
+  const totalInvoiceMonth = useMemo(
+    () => invoiceTotal + futureInvoiceTotal,
+    [invoiceTotal, futureInvoiceTotal],
   );
-
-  const gastosPrevistosLinha = useMemo(() => {
-    if (declaredEntry == null) return null as string | null;
-    const n = gastosPrevistos ?? 0;
-    return fmt(n);
-  }, [declaredEntry, gastosPrevistos]);
 
   const unpaidCardExpenseCount = useMemo(() => {
     if (!card) return 0;
@@ -115,9 +98,10 @@ export function CardInvoicePage() {
         expenseUsesCard(t) &&
         t.cardId === card.id &&
         t.date.startsWith(ym) &&
+        t.date <= today &&
         !t.paid,
     ).length;
-  }, [transactions, card, ym]);
+  }, [transactions, card, ym, today]);
 
   const previewTransactions = useMemo((): Transaction[] => {
     if (!card) return [];
@@ -127,13 +111,31 @@ export function CardInvoicePage() {
           t.type === "expense" &&
           expenseUsesCard(t) &&
           t.cardId === card.id &&
-          t.date.startsWith(ym),
+          t.date.startsWith(ym) &&
+          t.date <= today,
       )
       .sort((a, b) =>
         b.date !== a.date ? b.date.localeCompare(a.date) : b.id.localeCompare(a.id),
       )
       .slice(0, PREVIEW_LIMIT);
-  }, [transactions, card, ym]);
+  }, [transactions, card, ym, today]);
+
+  const futurePreviewTransactions = useMemo((): Transaction[] => {
+    if (!card) return [];
+    return transactions
+      .filter(
+        (t) =>
+          t.type === "expense" &&
+          expenseUsesCard(t) &&
+          t.cardId === card.id &&
+          t.date.startsWith(ym) &&
+          t.date > today,
+      )
+      .sort((a, b) =>
+        a.date !== b.date ? a.date.localeCompare(b.date) : a.id.localeCompare(b.id),
+      )
+      .slice(0, PREVIEW_LIMIT);
+  }, [transactions, card, ym, today]);
 
   const totalMonthCount = useMemo(() => {
     if (!card) return 0;
@@ -146,19 +148,7 @@ export function CardInvoicePage() {
     ).length;
   }, [transactions, card, ym]);
 
-  const [closingDialogOpen, setClosingDialogOpen] = useState(false);
   const [payConfirmOpen, setPayConfirmOpen] = useState(false);
-
-  const applyClosing = useCallback(
-    (total: number) => {
-      if (!card) return;
-      setDeclaredCardInvoice(card.id, currentMonth, {
-        total,
-        cardLabelForDescription: displayName,
-      });
-    },
-    [card, currentMonth, displayName, setDeclaredCardInvoice],
-  );
 
   const goInvoiceList = useCallback(() => {
     if (!card) return;
@@ -189,8 +179,6 @@ export function CardInvoicePage() {
   }
 
   const bankId = card.bankId;
-  const closingInitial =
-    declaredEntry != null ? declaredEntry.total.toFixed(2) : "";
 
   return (
     <SubPageLayout
@@ -234,46 +222,38 @@ export function CardInvoicePage() {
 
           <div className="mt-6">
             <p className="text-xs font-medium opacity-80 mb-2">Total da fatura</p>
-            <button
-              type="button"
-              onClick={() => setClosingDialogOpen(true)}
-              className="group flex flex-wrap items-center gap-2 text-left rounded-xl px-2 py-1.5 -ml-2 -mt-1 outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent hover:bg-white/10 active:bg-white/15 transition-colors"
-              aria-label="Editar valor do fechamento no banco"
-            >
-              <span
-                className="text-3xl sm:text-[2rem] font-bold tabular-nums tracking-tight"
-                style={{ textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
-              >
-                {fmt(faturaDisplay)}
-              </span>
-              <Pencil
-                className="w-5 h-5 shrink-0 opacity-80 group-hover:opacity-100"
-                strokeWidth={2.25}
-                aria-hidden
-              />
-            </button>
             <p
-              className="mt-2 text-sm font-medium tabular-nums opacity-90"
+              className="text-3xl sm:text-[2rem] font-bold tabular-nums tracking-tight"
+              style={{ textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
+            >
+              {fmt(invoiceTotal)}
+            </p>
+            <p
+              className="mt-2 text-sm font-medium tabular-nums opacity-80"
               style={{ textShadow: "0 1px 2px rgba(0,0,0,0.12)" }}
             >
-              Gastos previstos ·{" "}
-              {gastosPrevistosLinha != null ? (
-                gastosPrevistosLinha
-              ) : (
-                <span className="opacity-65">—</span>
-              )}
+              Até hoje: {fmt(invoiceTotal)}
             </p>
-            {declaredEntry == null ? (
-              <p className="mt-2 text-[11px] opacity-75 leading-snug max-w-[280px]">
-                Toca no valor para declarar o fechamento no banco e ver os gastos previstos.
+            {futureInvoiceTotal > 0 ? (
+              <p
+                className="mt-1 text-sm font-medium tabular-nums opacity-75"
+                style={{ textShadow: "0 1px 2px rgba(0,0,0,0.12)" }}
+              >
+                Futuros no mês: {fmt(futureInvoiceTotal)}
               </p>
             ) : null}
+            <p
+              className="mt-1 text-sm font-semibold tabular-nums opacity-90"
+              style={{ textShadow: "0 1px 2px rgba(0,0,0,0.12)" }}
+            >
+              Total destinado no mês: {fmt(totalInvoiceMonth)}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Lançamentos (pré-visualização) */}
-      <SectionTitle>Neste cartão · {formatMonthTitle(currentMonth)}</SectionTitle>
+      {/* Lançamentos já entrados */}
+      <SectionTitle>Neste cartão · até hoje</SectionTitle>
       <div
         className="rounded-2xl overflow-hidden mb-3"
         style={{
@@ -297,6 +277,29 @@ export function CardInvoicePage() {
           ))
         )}
       </div>
+
+      {futurePreviewTransactions.length > 0 ? (
+        <>
+          <SectionTitle>Próximos lançamentos do mês</SectionTitle>
+          <div
+            className="rounded-2xl overflow-hidden mb-3"
+            style={{
+              backgroundColor: "var(--app-card)",
+              boxShadow: "var(--app-card-shadow)",
+            }}
+          >
+            {futurePreviewTransactions.map((tx, i) => (
+              <TransactionRow
+                key={tx.id}
+                tx={tx}
+                isLast={i === futurePreviewTransactions.length - 1}
+                showDayOnMeta
+                onTap={() => openEdit(tx)}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <button
         type="button"
@@ -347,16 +350,6 @@ export function CardInvoicePage() {
             {unpaidCardExpenseCount === 1 ? "pendente" : "pendentes"}
           </button>
         </>
-      ) : null}
-
-      {closingDialogOpen ? (
-        <InvoiceClosingDialog
-          displayName={displayName}
-          initialValue={closingInitial}
-          hadExistingDeclared={declaredEntry != null}
-          onClose={() => setClosingDialogOpen(false)}
-          onApply={applyClosing}
-        />
       ) : null}
 
       {payConfirmOpen ? (
